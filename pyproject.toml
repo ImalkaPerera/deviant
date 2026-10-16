@@ -9,7 +9,7 @@ dependencies = []
 
 [project.optional-dependencies]
 yaml = ["PyYAML>=6"]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "PyYAML>=6"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -20,10 +20,11 @@ packages = []  # Phase 1 adds the real package; this stops auto-discovery
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["skills/deviant/scripts"]
+pythonpath = ["skills/deviant/scripts", "skills/deviant/scripts/detectors"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["tests/fixtures"]
 target-version = "py310"
 
 [tool.ruff.lint]

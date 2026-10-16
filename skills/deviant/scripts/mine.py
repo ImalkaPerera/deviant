@@ -107,7 +107,11 @@ def mine(items, min_items=DEFAULT_MIN_ITEMS, min_confidence=DEFAULT_MIN_CONFIDEN
     for (detector, peer), members in group_items(items).items():
         for rule in _candidates(detector, peer, members, min_items, min_confidence):
             # Rules with the same exceptions say the same thing; keep the strongest.
-            key = (detector, peer, tuple(sorted(e["item_id"] for e in rule["exceptions"])))
+            key = (
+                detector,
+                peer,
+                tuple(sorted((e["item_id"], e["file"], e["line"]) for e in rule["exceptions"])),
+            )
             current = best_by_exceptions.get(key)
             if current is None or _sort_key(rule) < _sort_key(current):
                 best_by_exceptions[key] = rule
