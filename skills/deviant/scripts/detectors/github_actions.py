@@ -47,7 +47,7 @@ def extract(repo_root: str) -> list[dict]:
             if isinstance(job.get("uses"), str):
                 # A call to a reusable workflow has no timeout or steps of its own,
                 # but the workflow it calls should be pinned like any action.
-                if not job["uses"].startswith("./"):
+                if not _is_local(job["uses"]):
                     line = _line_of(lines, job["uses"], start=job_line - 1)
                     items.append(_uses_item(rel, job["uses"], line, job.get("name")))
                 continue
@@ -108,7 +108,7 @@ def _step_items(rel, job, lines, job_line):
         if not isinstance(step, dict) or not isinstance(step.get("uses"), str):
             continue
         uses = step["uses"]
-        if uses.startswith("./"):
+        if _is_local(uses):
             continue  # local actions live in this repo and are not pinned
         line = _line_of(lines, uses, start=cursor)
         cursor = line
@@ -127,6 +127,14 @@ def _uses_item(rel, uses, line, name):
         "features": {"pinned_to_sha": bool(SHA_RE.match(ref))},
         "context": {"step_name": name},
     }
+
+
+def _is_local(uses: str) -> bool:
+    """True for a workflow or action stored in this repo.
+
+    "./" is the usual form. "$/" is what cargo-dist writes for the same thing.
+    """
+    return uses.startswith(("./", "$/"))
 
 
 def _line_of(lines, needle, start=0, regex=False):

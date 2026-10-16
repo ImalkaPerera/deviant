@@ -103,3 +103,9 @@ def test_reusable_workflow_call_must_be_pinned_too():
     assert not [
         i for i in edge_items() if i["peer_group"] == "gha_jobs" and i["item_id"] == "release"
     ]
+
+
+def test_same_repo_reusable_workflow_written_with_dollar_slash_is_local():
+    assert gha._is_local("./.github/workflows/build.yml")
+    assert gha._is_local("$/.github/workflows/build.yml")
+    assert not gha._is_local("actions/checkout@v4")
