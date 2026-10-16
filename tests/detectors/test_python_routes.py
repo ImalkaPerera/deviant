@@ -63,7 +63,8 @@ def test_broken_files_and_skipped_folders_are_ignored_without_crashing():
 def test_item_shape_matches_the_data_contract():
     item = items_for("basic")["POST /users"]
     assert item["detector"] == "python_routes"
-    assert item["peer_group"] == "fastapi_routes"
+    # Routes are compared within their own folder, so the peer group names that folder.
+    assert item["peer_group"] == "fastapi_routes:app/routes"
     assert item["file"] == "app/routes/users.py"
     assert item["line"] == 14
     assert item["context"]["function_name"] == "create_user"

@@ -398,7 +398,9 @@ def _routes_in_file(rel, tree, routers, resolver, extra_auth):
             items.append(
                 {
                     "detector": DETECTOR,
-                    "peer_group": PEER_GROUP,
+                    # Routes are compared within their own folder. A whole repo often mixes
+                    # auth styles, so a repo-wide rule rarely holds; a folder usually does.
+                    "peer_group": f"{PEER_GROUP}:{_folder(rel)}",
                     "item_id": f"{method} {path}",
                     "file": rel,
                     "line": node.lineno,
@@ -411,6 +413,12 @@ def _routes_in_file(rel, tree, routers, resolver, extra_auth):
                 }
             )
     return items
+
+
+def _folder(rel: str) -> str:
+    """Folder of a file, relative to the scanned root. Files at the root give "."."""
+    folder = rel.rsplit("/", 1)[0] if "/" in rel else "."
+    return folder
 
 
 def _route_decorator(dec):

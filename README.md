@@ -135,6 +135,11 @@ or yours today.
 
 Reads Python with the standard `ast` module.
 
+Routes are compared with the other routes in the same folder. A whole project often mixes
+auth styles, so a project-wide rule rarely holds, while one folder usually follows one
+convention. Each folder needs enough routes to pass the size floor, so small folders show
+nothing.
+
 | Feature | True when |
 |---|---|
 | `is_mutating` | The route uses POST, PUT, PATCH or DELETE |
