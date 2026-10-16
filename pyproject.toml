@@ -1,0 +1,22 @@
+[project]
+name = "deviant-scan"
+version = "0.0.1"
+description = "Finds bugs where code breaks the project's own patterns."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6"]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = []  # Phase 1 adds the real package; this stops auto-discovery
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
