@@ -10,6 +10,7 @@ import ast
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 DETECTOR = "python_routes"
@@ -18,17 +19,40 @@ ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 ROUTER_CALLS = {"APIRouter", "FastAPI"}
 DEPENDENCY_CALLS = {"Depends", "Security"}
+# Whole words that mark an auth dependency. Inflections are listed because matching
+# is by whole word, so "auth" must not match "authors".
 AUTH_WORDS = {
     "auth",
+    "authn",
+    "authz",
     "authenticate",
+    "authenticated",
+    "authentication",
     "authorize",
+    "authorized",
+    "authorization",
     "token",
     "verify",
+    "verified",
     "require",
+    "requires",
+    "required",
     "permission",
+    "permissions",
     "admin",
+    "superuser",
+    "oauth",
+    "oauth2",
+    "jwt",
+    "bearer",
+    "login",
+    "credentials",
     "current_user",
+    "api_key",
+    "apikey",
 }
+# Words that make a name auth when they appear together, as in get_current_active_user.
+AUTH_WORD_PAIRS = {("current", "user")}
 # "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
 RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
 MAX_BYTES = 1_000_000
@@ -51,11 +75,14 @@ def extract(repo_root: str) -> list[dict]:
     extra_auth = _extra_auth_words(root)
     trees = _parse_files(root)
     index = _module_index(trees)
+    imports = {rel: _imports(tree, rel) for rel, tree in trees.items()}
     routers = _find_routers(trees)
-    _add_include_dependencies(trees, index, routers)
+    _add_include_edges(trees, index, imports, routers)
+    aliases = _find_dependency_aliases(trees)
     items = []
     for rel, tree in trees.items():
-        items.extend(_routes_in_file(rel, tree, routers, extra_auth))
+        resolver = _AliasResolver(rel, imports[rel], index, aliases)
+        items.extend(_routes_in_file(rel, tree, routers, resolver, extra_auth))
     return items
 
 
@@ -71,19 +98,32 @@ def _extra_auth_words(root: Path) -> set[str]:
 
 def _parse_files(root: Path) -> dict[str, ast.Module]:
     trees = {}
+    failed = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
         for name in sorted(filenames):
             if not name.endswith(".py"):
                 continue
             path = Path(dirpath) / name
-            if path.is_symlink() or path.stat().st_size > MAX_BYTES:
-                continue
             rel = path.relative_to(root).as_posix()
             try:
-                trees[rel] = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
-            except (SyntaxError, ValueError, UnicodeDecodeError):
+                if path.is_symlink() or path.stat().st_size > MAX_BYTES:
+                    continue
+                # Parse bytes so a UTF-8 BOM or a coding cookie is handled like Python does.
+                trees[rel] = ast.parse(path.read_bytes(), filename=rel)
+            except OSError:
                 continue
+            except (SyntaxError, ValueError):
+                failed.append(rel)
+    if failed:
+        # A skipped file can hide the auth helpers other files import, so say so.
+        version = ".".join(map(str, sys.version_info[:2]))
+        shown = ", ".join(failed[:3]) + (" ..." if len(failed) > 3 else "")
+        print(
+            f"python_routes: could not parse {len(failed)} file(s) with Python {version}: "
+            f"{shown}. They may use newer syntax; results that depend on them can be wrong.",
+            file=sys.stderr,
+        )
     return trees
 
 
@@ -108,28 +148,39 @@ def _module_index(trees) -> dict[str, str | None]:
     return index
 
 
+def _assigned_name(node):
+    """(name, value) for `x = value` or `x: T = value`, else None."""
+    if isinstance(node, ast.Assign) and len(node.targets) == 1:
+        target = node.targets[0]
+    elif isinstance(node, ast.AnnAssign) and node.value is not None:
+        target = node.target
+    else:
+        return None
+    if isinstance(target, ast.Name):
+        return target.id, node.value
+    return None
+
+
 def _find_routers(trees):
+    """Routers and apps by (file, variable). Module-level names win over ones in functions."""
     routers = {}
     for rel, tree in trees.items():
-        for node in tree.body:
-            if not (
-                isinstance(node, ast.Assign)
-                and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.Call)
-                and _last_name(node.value.func) in ROUTER_CALLS
-            ):
+        top_level = {id(n) for n in tree.body}
+        nested = [n for n in ast.walk(tree) if id(n) not in top_level]
+        for node in list(tree.body) + nested:
+            assigned = _assigned_name(node)
+            if assigned is None:
                 continue
-            routers[(rel, node.targets[0].id)] = {
-                "deps": _keyword_dependencies(node.value),
-                "include": [],
-            }
+            name, value = assigned
+            if not (isinstance(value, ast.Call) and _last_name(value.func) in ROUTER_CALLS):
+                continue
+            routers.setdefault((rel, name), {"deps": _keyword_dependencies(value), "parents": []})
     return routers
 
 
-def _add_include_dependencies(trees, index, routers):
+def _add_include_edges(trees, index, imports, routers):
+    """Record each include_router call as (parent router, dependencies added) on the child."""
     for rel, tree in trees.items():
-        imports = _imports(tree, rel)
         for node in ast.walk(tree):
             if not (
                 isinstance(node, ast.Call)
@@ -138,9 +189,78 @@ def _add_include_dependencies(trees, index, routers):
                 and node.args
             ):
                 continue
-            target = _resolve_router(node.args[0], rel, imports, index, routers)
-            if target is not None:
-                routers[target]["include"].extend(_keyword_dependencies(node))
+            child = _resolve_router(node.args[0], rel, imports[rel], index, routers)
+            if child is None:
+                continue
+            parent = _resolve_router(node.func.value, rel, imports[rel], index, routers)
+            routers[child]["parents"].append((parent, _keyword_dependencies(node)))
+
+
+def _effective_dependencies(key, routers, seen=None):
+    """Dependencies a router's routes get from the router and every router that includes it.
+
+    A router included in several places gets the union of all of them.
+    """
+    seen = set() if seen is None else seen
+    if key in seen:
+        return []
+    seen.add(key)
+    info = routers[key]
+    names = list(info["deps"])
+    for parent, added in info["parents"]:
+        names += added
+        if parent is not None:
+            names += _effective_dependencies(parent, routers, seen)
+    return names
+
+
+def _find_dependency_aliases(trees):
+    """Module-level aliases like CurrentUser = Annotated[User, Depends(get_current_user)]."""
+    aliases = {}
+    for rel, tree in trees.items():
+        for node in tree.body:
+            assigned = _assigned_name(node)
+            if assigned is None:
+                continue
+            name, value = assigned
+            if isinstance(value, ast.Subscript) and _last_name(value.value) == "Annotated":
+                names = _depends_names(value)
+                if names:
+                    aliases[(rel, name)] = names
+    return aliases
+
+
+class _AliasResolver:
+    """Finds the dependencies behind an alias used in a route parameter annotation."""
+
+    def __init__(self, rel, imports, index, aliases):
+        self.rel, self.imports, self.index, self.aliases = rel, imports, index, aliases
+
+    def names_in(self, annotation) -> list[str]:
+        names = []
+        for node in ast.walk(annotation):
+            key = self._alias_key(node)
+            if key is not None:
+                names += self.aliases[key]
+        return names
+
+    def _alias_key(self, node):
+        if isinstance(node, ast.Name):
+            if (self.rel, node.id) in self.aliases:
+                return (self.rel, node.id)
+            imported = self.imports.get(node.id)
+            if imported and imported["from"]:
+                module, name = imported["from"]
+                target = self.index.get(module)
+                if target and (target, name) in self.aliases:
+                    return (target, name)
+        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+            imported = self.imports.get(node.value.id)
+            if imported:
+                target = self.index.get(imported["full"])
+                if target and (target, node.attr) in self.aliases:
+                    return (target, node.attr)
+        return None
 
 
 def _imports(tree, rel):
@@ -192,7 +312,7 @@ def _resolve_router(expr, rel, imports, index, routers):
     return None
 
 
-def _routes_in_file(rel, tree, routers, extra_auth):
+def _routes_in_file(rel, tree, routers, resolver, extra_auth):
     items = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -202,15 +322,14 @@ def _routes_in_file(rel, tree, routers, extra_auth):
             if route is None:
                 continue
             router_name, method, path = route
-            info = routers.get((rel, router_name))
-            if info is None:
+            if (rel, router_name) not in routers:
                 continue
-            names = info["deps"] + info["include"] + _depends_names(dec)
+            names = _effective_dependencies((rel, router_name), routers) + _depends_names(dec)
             for default in node.args.defaults + [d for d in node.args.kw_defaults if d]:
                 names += _depends_names(default)
             for arg in _all_args(node.args):
                 if arg.annotation is not None:
-                    names += _depends_names(arg.annotation)
+                    names += _depends_names(arg.annotation) + resolver.names_in(arg.annotation)
             rate_decorator = any(
                 _is_rate(_dotted(d.func if isinstance(d, ast.Call) else d) or "")
                 for d in node.decorator_list
@@ -302,7 +421,9 @@ def _last_name(node) -> str:
 
 
 def _normalise(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    """snake_case words: "JWTBearer" -> "jwt_bearer", "GetCurrentUser" -> "get_current_user"."""
+    split = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", name)
+    return re.sub(r"[^a-z0-9]+", "_", split.lower()).strip("_")
 
 
 def _matches(name: str, words) -> bool:
@@ -312,7 +433,10 @@ def _matches(name: str, words) -> bool:
 
 
 def _is_auth(name: str, extra_auth: set[str]) -> bool:
-    return _matches(name, AUTH_WORDS | extra_auth)
+    if _matches(name, AUTH_WORDS | extra_auth):
+        return True
+    words = set(_normalise(name).split("_"))
+    return any(set(pair) <= words for pair in AUTH_WORD_PAIRS)
 
 
 def _is_rate(name: str) -> bool:

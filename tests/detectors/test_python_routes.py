@@ -85,11 +85,72 @@ def test_auth_names_match_whole_words(name, expected):
 
 
 def test_user_can_add_auth_words():
-    assert pr._is_auth("check_api_key", {"api_key"})
-    assert not pr._is_auth("check_api_key", set())
+    assert pr._is_auth("check_tenant_access", {"tenant_access"})
+    assert not pr._is_auth("check_tenant_access", set())
 
 
 def test_pagination_limit_is_not_a_rate_limit():
     assert not pr._is_rate("limit_offset")
     assert pr._is_rate("rate_limiter")
     assert pr._is_rate("limiter.limit")
+
+
+def test_annotated_aliases_imported_from_another_module_count_as_auth():
+    items = items_for("template_style")
+    assert items["POST /"]["features"]["has_auth"]  # current_user: CurrentUser
+    assert items["PUT /{item_id}"]["features"]["has_auth"]  # deps.CurrentUser
+    assert items["DELETE /{item_id}"]["features"]["has_auth"]  # get_current_active_superuser
+
+
+def test_alias_without_auth_does_not_count_as_auth():
+    assert not features_for("template_style", "POST /public")["has_auth"]  # SessionDep only
+
+
+def test_router_declared_with_a_type_annotation_is_found():
+    assert items_for("template_style")["POST /"]["file"] == "app/api/routes/items.py"
+
+
+def test_auth_on_an_outer_router_reaches_routes_on_nested_routers():
+    # create_app() -> application.include_router(api_router, deps) -> api_router -> admin.router
+    assert features_for("nested_routers", "PUT /settings")["has_auth"]
+
+
+def test_app_level_dependencies_reach_included_routers():
+    assert features_for("nested_routers", "POST /reports")["has_auth"]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("oauth2_scheme", True),
+        ("reusable_oauth2", True),
+        ("JWTBearer", True),
+        ("HTTPBearer", True),
+        ("APIKeyHeader", True),
+        ("GetCurrentUser", True),
+        ("get_current_active_user", True),
+        ("get_current_active_superuser", True),
+        ("get_authenticated_user", True),
+        ("check_permissions", True),
+        ("get_session", False),
+        ("get_current_time", False),
+        ("limit_offset", False),
+    ],
+)
+def test_auth_names_cover_common_fastapi_styles(name, expected):
+    assert pr._is_auth(name, set()) is expected
+
+
+def test_file_with_utf8_bom_is_parsed(tmp_path):
+    source = (FIXTURES / "basic" / "app" / "routes" / "users.py").read_bytes()
+    (tmp_path / "users.py").write_bytes(b"\xef\xbb\xbf" + source)
+    assert {i["item_id"] for i in pr.extract(str(tmp_path))} == {
+        "GET /users",
+        "POST /users",
+        "DELETE /users/{user_id}",
+    }
+
+
+def test_unparseable_files_are_reported_on_stderr(capsys):
+    pr.extract(str(FIXTURES / "broken"))
+    assert "could not parse 1 file(s)" in capsys.readouterr().err
