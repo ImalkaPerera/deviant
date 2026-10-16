@@ -5,7 +5,10 @@ Rules for every detector (see CONTRIBUTING.md):
 - Never import or run project code. Use ast or a parser, not exec.
 - Skip files larger than 1 MB, unparseable files, and folders like node_modules.
 - Never do math and never call git. The mining step does the math.
-- Every feature is True or False.
+- Every feature is True or False, and every item in a peer group has the same features.
+- Name features that describe an item is_* (is_mutating). They are only used as
+  if-then conditions. Name features an item should have has_* (has_auth).
+- If a file cannot be parsed, skip it and say so on stderr.
 
 Files whose names start with "_" are skipped by the loader, so this template
 never runs during a scan.

@@ -145,3 +145,37 @@ def test_items_in_one_group_must_share_feature_names():
     del items[1]["features"]["has_auth"]
     with pytest.raises(ValueError, match="inconsistent feature names"):
         mine(items)
+
+
+def test_item_missing_two_features_gives_two_findings():
+    items = make_items(48, auth_missing_ids={"POST /route/0"})
+    for item in items:
+        item["features"]["has_response_model"] = item["item_id"] != "POST /route/0"
+    features = sorted(r["feature"] for r in mine(items))
+    assert features == ["has_auth", "has_response_model"]
+
+
+def test_is_features_are_never_required():
+    # 47 POST routes and one GET: "every route is mutating" is not a rule.
+    items = make_items(48)
+    items[0]["features"]["is_mutating"] = False
+    assert all(r["feature"] != "is_mutating" for r in mine(items))
+
+
+def test_a_failing_detector_does_not_stop_the_scan(tmp_path: Path, capsys):
+    detectors = tmp_path / "detectors"
+    detectors.mkdir()
+    (detectors / "broken.py").write_text(
+        "def extract(repo_root):\n    raise RuntimeError('boom')\n"
+    )
+    (detectors / "import_error.py").write_text("import not_a_real_module_xyz\n")
+    assert run(tmp_path, detectors, min_items=20, min_confidence=0.80, as_json=True) == 0
+    err = capsys.readouterr().err
+    assert "detector broken failed" in err
+    assert "could not load detector import_error.py" in err
+
+
+def test_run_rejects_a_missing_repo(tmp_path: Path, capsys):
+    code = run(tmp_path / "nope", tmp_path, min_items=20, min_confidence=0.80, as_json=True)
+    assert code == 2
+    assert "is not a directory" in capsys.readouterr().err

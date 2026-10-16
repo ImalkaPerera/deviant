@@ -18,6 +18,9 @@ from stats import (
 )
 
 MIN_PREVALENCE = 0.5  # plan 6.6: features true for less than half the group are not patterns
+# Features named is_* describe an item (is_mutating). They are only used as if-then
+# conditions, never as something an item is required to have.
+CONDITION_PREFIX = "is_"
 EXAMPLES_PER_RULE = 3
 REQUIRED_KEYS = ("detector", "peer_group", "item_id", "file", "line", "features")
 DETECTORS_DIR = Path(__file__).resolve().parent / "detectors"
@@ -68,6 +71,8 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
     return {
         "rule_id": rule_id,
         "kind": kind,
+        "condition": cond,
+        "feature": feature,
         "statement": statement,
         "n": n,
         "s": s,
@@ -79,22 +84,22 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
 
 
 def _candidates(detector, peer, members, min_items, min_confidence):
-    features = sorted({f for m in members for f in m["features"]})
-    for feature in features:
+    names = sorted({f for m in members for f in m["features"]})
+    conditions = [f for f in names if f.startswith(CONDITION_PREFIX)]
+    requirements = [f for f in names if not f.startswith(CONDITION_PREFIX)]
+    for feature in requirements:
         pool = members
         s = sum(_has(m, feature) for m in pool)
         if s / len(pool) >= MIN_PREVALENCE and passes_filter(
             s, len(pool), min_items, min_confidence
         ):
             yield _make_rule(detector, peer, "plain", None, feature, pool, s, len(pool))
-    for cond in features:
+    for cond in conditions:
         pool = [m for m in members if _has(m, cond)]
         # A condition true for every item is the same as a plain rule.
         if not pool or len(pool) == len(members):
             continue
-        for feature in features:
-            if feature == cond:
-                continue
+        for feature in requirements:
             s = sum(_has(m, feature) for m in pool)
             if s / len(pool) < MIN_PREVALENCE:
                 continue
@@ -114,10 +119,13 @@ def mine(items, min_items=DEFAULT_MIN_ITEMS, min_confidence=DEFAULT_MIN_CONFIDEN
     best_by_exceptions = {}
     for (detector, peer), members in group_items(items).items():
         for rule in _candidates(detector, peer, members, min_items, min_confidence):
-            # Rules with the same exceptions say the same thing; keep the strongest.
+            # A plain rule and an if-then rule for the same feature with the same exceptions
+            # say the same thing; keep the stronger. Different features stay separate, so an
+            # item missing both auth and a response model gives two findings.
             key = (
                 detector,
                 peer,
+                rule["feature"],
                 tuple(sorted((e["item_id"], e["file"], e["line"]) for e in rule["exceptions"])),
             )
             current = best_by_exceptions.get(key)
@@ -134,7 +142,11 @@ def load_detectors(detectors_dir: Path):
             continue
         spec = importlib.util.spec_from_file_location(f"deviant_detector_{path.stem}", path)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as error:  # one broken detector must not stop the scan
+            print(f"warning: could not load detector {path.name}: {error}", file=sys.stderr)
+            continue
         if callable(getattr(module, "extract", None)):
             modules.append(module)
     return modules
@@ -143,7 +155,11 @@ def load_detectors(detectors_dir: Path):
 def collect_items(repo_root: Path, detectors_dir: Path):
     items = []
     for module in load_detectors(detectors_dir):
-        items.extend(module.extract(str(repo_root)))
+        try:
+            items.extend(module.extract(str(repo_root)))
+        except Exception as error:  # one broken detector must not stop the scan
+            name = module.__name__.removeprefix("deviant_detector_")
+            print(f"warning: detector {name} failed and was skipped: {error}", file=sys.stderr)
     return items
 
 
@@ -158,6 +174,9 @@ def _format_text(rules):
 
 
 def run(repo_root, detectors_dir, min_items, min_confidence, as_json):
+    if not Path(repo_root).is_dir():
+        print(f"error: {repo_root} is not a directory", file=sys.stderr)
+        return 2
     items = collect_items(Path(repo_root), Path(detectors_dir))
     rules = mine(items, min_items=min_items, min_confidence=min_confidence)
     if as_json:
