@@ -154,3 +154,33 @@ def test_file_with_utf8_bom_is_parsed(tmp_path):
 def test_unparseable_files_are_reported_on_stderr(capsys):
     pr.extract(str(FIXTURES / "broken"))
     assert "could not parse 1 file(s)" in capsys.readouterr().err
+
+
+def test_auth_subject_type_counts_as_auth_even_without_an_auth_named_dependency():
+    assert features_for("auth_types", "POST /me/payment")["has_auth"]
+    assert not features_for("auth_types", "POST /public/hook")["has_auth"]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Authenticator", True),
+        ("WebUserAuthorizer", True),
+        ("OrgPolicyGuard", True),
+        ("oidc_scheme", True),
+        ("_web_user", True),
+    ],
+)
+def test_auth_dependency_names_seen_in_real_projects(name, expected):
+    assert pr._is_auth(name, set()) is expected
+
+
+@pytest.mark.parametrize(("name", "expected"), [("AuthSubject", True), ("TokenCreate", False)])
+def test_auth_type_names_are_strict(name, expected):
+    assert pr._matches_auth_type(name) is expected
+
+
+def test_jinja_templates_are_skipped_without_a_warning(tmp_path, capsys):
+    (tmp_path / "gen.py").write_text("from {{ module }} import x\n{% for a in b %}\n")
+    assert pr.extract(str(tmp_path)) == []
+    assert capsys.readouterr().err == ""

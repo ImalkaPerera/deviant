@@ -43,16 +43,36 @@ AUTH_WORDS = {
     "superuser",
     "oauth",
     "oauth2",
+    "oidc",
     "jwt",
     "bearer",
     "login",
     "credentials",
+    "authenticator",
+    "authorizer",
+    "guard",
+    "scheme",
     "current_user",
     "api_key",
     "apikey",
 }
+# Type names that mark an auth subject, as in `subject: AuthSubject[User]`. Stricter than
+# AUTH_WORDS on purpose: a type called TokenCreate is a request body, not auth.
+AUTH_TYPE_WORDS = {
+    "auth",
+    "authn",
+    "authz",
+    "authenticate",
+    "authenticated",
+    "authenticator",
+    "authentication",
+    "authorize",
+    "authorized",
+    "authorizer",
+    "authorization",
+}
 # Words that make a name auth when they appear together, as in get_current_active_user.
-AUTH_WORD_PAIRS = {("current", "user")}
+AUTH_WORD_PAIRS = {("current", "user"), ("web", "user")}
 # "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
 RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
 MAX_BYTES = 1_000_000
@@ -114,7 +134,8 @@ def _parse_files(root: Path) -> dict[str, ast.Module]:
             except OSError:
                 continue
             except (SyntaxError, ValueError):
-                failed.append(rel)
+                if not _looks_like_template(path):
+                    failed.append(rel)
     if failed:
         # A skipped file can hide the auth helpers other files import, so say so.
         version = ".".join(map(str, sys.version_info[:2]))
@@ -125,6 +146,15 @@ def _parse_files(root: Path) -> dict[str, ast.Module]:
             file=sys.stderr,
         )
     return trees
+
+
+def _looks_like_template(path: Path) -> bool:
+    """Jinja and similar templates are not Python until rendered; skip them without a warning."""
+    try:
+        head = path.read_bytes()[:20_000]
+    except OSError:
+        return False
+    return b"{%" in head or b"{{" in head
 
 
 def _module_name(rel: str) -> str:
@@ -215,7 +245,11 @@ def _effective_dependencies(key, routers, seen=None):
 
 
 def _find_dependency_aliases(trees):
-    """Module-level aliases like CurrentUser = Annotated[User, Depends(get_current_user)]."""
+    """Module-level aliases like CurrentUser = Annotated[User, Depends(get_current_user)].
+
+    Maps (file, name) to (dependency names, type names). Type names are every name in the
+    alias, so `Annotated[AuthSubject[User], Depends(check)]` also records AuthSubject.
+    """
     aliases = {}
     for rel, tree in trees.items():
         for node in tree.body:
@@ -224,10 +258,22 @@ def _find_dependency_aliases(trees):
                 continue
             name, value = assigned
             if isinstance(value, ast.Subscript) and _last_name(value.value) == "Annotated":
-                names = _depends_names(value)
-                if names:
-                    aliases[(rel, name)] = names
+                deps = _depends_names(value)
+                types = _type_names(value)
+                if deps or types:
+                    aliases[(rel, name)] = (deps, types)
     return aliases
+
+
+def _type_names(expr) -> list[str]:
+    """Dotted names of every Name and Attribute in an annotation."""
+    names = []
+    for node in ast.walk(expr):
+        if isinstance(node, (ast.Name, ast.Attribute)):
+            dotted = _dotted(node)
+            if dotted:
+                names.append(dotted)
+    return names
 
 
 class _AliasResolver:
@@ -236,13 +282,16 @@ class _AliasResolver:
     def __init__(self, rel, imports, index, aliases):
         self.rel, self.imports, self.index, self.aliases = rel, imports, index, aliases
 
-    def names_in(self, annotation) -> list[str]:
-        names = []
+    def names_in(self, annotation) -> tuple[list[str], list[str]]:
+        """(dependency names, type names) behind any aliases used in the annotation."""
+        deps, types = [], []
         for node in ast.walk(annotation):
             key = self._alias_key(node)
             if key is not None:
-                names += self.aliases[key]
-        return names
+                alias_deps, alias_types = self.aliases[key]
+                deps += alias_deps
+                types += alias_types
+        return deps, types
 
     def _alias_key(self, node):
         if isinstance(node, ast.Name):
@@ -325,11 +374,14 @@ def _routes_in_file(rel, tree, routers, resolver, extra_auth):
             if (rel, router_name) not in routers:
                 continue
             names = _effective_dependencies((rel, router_name), routers) + _depends_names(dec)
+            types: list[str] = []
             for default in node.args.defaults + [d for d in node.args.kw_defaults if d]:
                 names += _depends_names(default)
             for arg in _all_args(node.args):
                 if arg.annotation is not None:
-                    names += _depends_names(arg.annotation) + resolver.names_in(arg.annotation)
+                    alias_deps, alias_types = resolver.names_in(arg.annotation)
+                    names += _depends_names(arg.annotation) + alias_deps
+                    types += alias_types + _type_names(arg.annotation)
             rate_decorator = any(
                 _is_rate(_dotted(d.func if isinstance(d, ast.Call) else d) or "")
                 for d in node.decorator_list
@@ -337,7 +389,8 @@ def _routes_in_file(rel, tree, routers, resolver, extra_auth):
             )
             features = {
                 "is_mutating": method in MUTATING,
-                "has_auth": any(_is_auth(n, extra_auth) for n in names),
+                "has_auth": any(_is_auth(n, extra_auth) for n in names)
+                or any(_matches(t, AUTH_TYPE_WORDS) for t in types),
                 "has_response_model": isinstance(dec, ast.Call)
                 and any(kw.arg == "response_model" for kw in dec.keywords),
                 "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),
@@ -437,6 +490,10 @@ def _is_auth(name: str, extra_auth: set[str]) -> bool:
         return True
     words = set(_normalise(name).split("_"))
     return any(set(pair) <= words for pair in AUTH_WORD_PAIRS)
+
+
+def _matches_auth_type(name: str) -> bool:
+    return _matches(name, AUTH_TYPE_WORDS)
 
 
 def _is_rate(name: str) -> bool:
