@@ -68,3 +68,38 @@ def test_missing_pyyaml_skips_the_detector(monkeypatch, capsys):
 def test_line_numbers_point_at_the_right_line(needle, expected_line):
     lines = (FIXTURES / "mixed" / ".github" / "workflows" / "ci.yml").read_text().splitlines()
     assert gha._line_of(lines, needle) == expected_line
+
+
+def edge_items():
+    return gha.extract(str(FIXTURES / "edge"))
+
+
+def test_permissions_on_every_job_count_as_a_permissions_block():
+    workflow = [i for i in edge_items() if i["peer_group"] == "gha_workflows"][0]
+    assert workflow["features"] == {"has_permissions_block": True}
+
+
+def test_job_line_skips_same_named_keys_above_jobs():
+    build = [i for i in edge_items() if i["peer_group"] == "gha_jobs"][0]
+    assert (build["item_id"], build["line"]) == ("build", 8)
+
+
+def test_uppercase_sha_counts_as_pinned():
+    steps = [i for i in edge_items() if i["item_id"].startswith("actions/checkout@")]
+    assert steps[0]["features"] == {"pinned_to_sha": True}
+
+
+def test_repeated_steps_get_their_own_lines():
+    cache_lines = [i["line"] for i in edge_items() if i["item_id"] == "actions/cache@v4"]
+    assert cache_lines == [14, 15]
+
+
+def test_reusable_workflow_call_must_be_pinned_too():
+    calls = [i for i in edge_items() if i["item_id"].startswith("octo-org/shared/")]
+    assert len(calls) == 1
+    assert calls[0]["peer_group"] == "gha_third_party_steps"
+    assert calls[0]["features"] == {"pinned_to_sha": False}
+    assert calls[0]["line"] == 19
+    assert not [
+        i for i in edge_items() if i["peer_group"] == "gha_jobs" and i["item_id"] == "release"
+    ]

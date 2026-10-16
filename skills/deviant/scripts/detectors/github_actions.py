@@ -10,7 +10,7 @@ from pathlib import Path
 
 DETECTOR = "github_actions"
 MAX_BYTES = 1_000_000
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def extract(repo_root: str) -> list[dict]:
@@ -36,12 +36,21 @@ def extract(repo_root: str) -> list[dict]:
         if not isinstance(data, dict):
             continue
         lines = text.splitlines()
-        items.append(_workflow_item(rel, data))
         jobs = data.get("jobs") if isinstance(data.get("jobs"), dict) else {}
+        items.append(_workflow_item(rel, data, jobs))
+        jobs_line = _line_of(lines, r"^['\"]?jobs['\"]?\s*:", regex=True)
         for job_id, job in jobs.items():
-            if not isinstance(job, dict) or "uses" in job:
-                continue  # a call to a reusable workflow has no timeout or steps of its own
-            job_line = _line_of(lines, rf"^\s*{re.escape(str(job_id))}:", regex=True)
+            if not isinstance(job, dict):
+                continue
+            key = re.escape(str(job_id))
+            job_line = _line_of(lines, rf"^\s+['\"]?{key}['\"]?\s*:", start=jobs_line, regex=True)
+            if isinstance(job.get("uses"), str):
+                # A call to a reusable workflow has no timeout or steps of its own,
+                # but the workflow it calls should be pinned like any action.
+                if not job["uses"].startswith("./"):
+                    line = _line_of(lines, job["uses"], start=job_line - 1)
+                    items.append(_uses_item(rel, job["uses"], line, job.get("name")))
+                continue
             items.append(_job_item(rel, data, str(job_id), job, job_line))
             items.extend(_step_items(rel, job, lines, job_line))
     return items
@@ -60,14 +69,17 @@ def _workflow_files(root: Path) -> list[Path]:
     return files
 
 
-def _workflow_item(rel, data):
+def _workflow_item(rel, data, jobs):
+    job_dicts = [j for j in jobs.values() if isinstance(j, dict)]
+    # Permissions set on every job limit the token as well as a workflow-level block does.
+    every_job_scoped = bool(job_dicts) and all("permissions" in j for j in job_dicts)
     return {
         "detector": DETECTOR,
         "peer_group": "gha_workflows",
         "item_id": rel,
         "file": rel,
         "line": 1,
-        "features": {"has_permissions_block": "permissions" in data},
+        "features": {"has_permissions_block": "permissions" in data or every_job_scoped},
         "context": {"name": data.get("name")},
     }
 
@@ -91,25 +103,30 @@ def _job_item(rel, data, job_id, job, line):
 def _step_items(rel, job, lines, job_line):
     items = []
     steps = job.get("steps") if isinstance(job.get("steps"), list) else []
+    cursor = job_line - 1  # search forward so repeated steps get their own lines
     for step in steps:
         if not isinstance(step, dict) or not isinstance(step.get("uses"), str):
             continue
         uses = step["uses"]
         if uses.startswith("./"):
             continue  # local actions live in this repo and are not pinned
-        ref = uses.rsplit("@", 1)[1] if "@" in uses else ""
-        items.append(
-            {
-                "detector": DETECTOR,
-                "peer_group": "gha_third_party_steps",
-                "item_id": uses,
-                "file": rel,
-                "line": _line_of(lines, uses, start=job_line - 1),
-                "features": {"pinned_to_sha": bool(SHA_RE.match(ref))},
-                "context": {"step_name": step.get("name")},
-            }
-        )
+        line = _line_of(lines, uses, start=cursor)
+        cursor = line
+        items.append(_uses_item(rel, uses, line, step.get("name")))
     return items
+
+
+def _uses_item(rel, uses, line, name):
+    ref = uses.rsplit("@", 1)[1] if "@" in uses else ""
+    return {
+        "detector": DETECTOR,
+        "peer_group": "gha_third_party_steps",
+        "item_id": uses,
+        "file": rel,
+        "line": line,
+        "features": {"pinned_to_sha": bool(SHA_RE.match(ref))},
+        "context": {"step_name": name},
+    }
 
 
 def _line_of(lines, needle, start=0, regex=False):

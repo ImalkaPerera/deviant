@@ -1,0 +1,19 @@
+name: Scoped
+on:
+  workflow_call:
+    inputs:
+      build:
+        type: string
+jobs:
+  "build":
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3D3C42E5AAC5BA805825DA76410C181273BA90B1
+      - uses: actions/cache@v4
+      - uses: actions/cache@v4
+  release:
+    permissions:
+      contents: write
+    uses: octo-org/shared/.github/workflows/release.yml@v1
