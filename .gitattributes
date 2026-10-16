@@ -1,0 +1,2 @@
+# Store and check out text as LF so Windows and Linux produce the same files.
+* text=auto eol=lf

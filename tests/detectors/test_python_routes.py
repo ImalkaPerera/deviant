@@ -87,3 +87,9 @@ def test_auth_names_match_whole_words(name, expected):
 def test_user_can_add_auth_words():
     assert pr._is_auth("check_api_key", {"api_key"})
     assert not pr._is_auth("check_api_key", set())
+
+
+def test_pagination_limit_is_not_a_rate_limit():
+    assert not pr._is_rate("limit_offset")
+    assert pr._is_rate("rate_limiter")
+    assert pr._is_rate("limiter.limit")

@@ -35,6 +35,14 @@ def _validate(items):
         missing = [k for k in REQUIRED_KEYS if k not in item]
         if missing:
             raise ValueError(f"detector item missing keys {missing}: {item.get('item_id')}")
+    # A feature missing from one item would silently count as False, so every item in a
+    # peer group must report the same feature names.
+    names_by_group = {}
+    for item in items:
+        group = (item["detector"], item["peer_group"])
+        names_by_group.setdefault(group, set(item["features"]))
+        if set(item["features"]) != names_by_group[group]:
+            raise ValueError(f"inconsistent feature names in {group}: {item['item_id']}")
 
 
 def _has(item, feature):
@@ -155,7 +163,11 @@ def run(repo_root, detectors_dir, min_items, min_confidence, as_json):
     if as_json:
         print(json.dumps({"version": 1, "rules": rules}, indent=2))
     elif not rules:
-        print(f"no rules found. Groups may be too small (need about {min_items}+ similar items).")
+        print(
+            "no rules found. Groups may be too small: a group needs at least "
+            f"{min_items} similar items, and one exception needs about 25 "
+            "at the default 0.80 confidence."
+        )
     else:
         print(_format_text(rules))
     return 0

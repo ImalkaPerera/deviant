@@ -29,7 +29,8 @@ AUTH_WORDS = {
     "admin",
     "current_user",
 }
-RATE_WORDS = {"rate", "limit", "limiter", "throttle"}
+# "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
+RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
 MAX_BYTES = 1_000_000
 SKIP_DIRS = {
     ".git",
@@ -156,7 +157,8 @@ def _imports(tree, rel):
                     "from": None,
                 }
         elif isinstance(node, ast.ImportFrom):
-            base = package[: len(package) - (node.level - 1)] if node.level else []
+            # A relative import climbs node.level - 1 packages above the current one.
+            base = package[: max(len(package) - (node.level - 1), 0)] if node.level else []
             module = ".".join(base + ([node.module] if node.module else []))
             for alias in node.names:
                 if alias.name == "*":

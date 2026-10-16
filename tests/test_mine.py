@@ -138,3 +138,10 @@ def test_run_with_no_detectors_says_no_rules(tmp_path: Path, capsys):
     detectors.mkdir()
     assert run(tmp_path, detectors, min_items=20, min_confidence=0.80, as_json=False) == 0
     assert "no rules found" in capsys.readouterr().out
+
+
+def test_items_in_one_group_must_share_feature_names():
+    items = make_items(3)
+    del items[1]["features"]["has_auth"]
+    with pytest.raises(ValueError, match="inconsistent feature names"):
+        mine(items)
