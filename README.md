@@ -229,8 +229,7 @@ Contributions are welcome, especially new detectors. A detector is one Python fi
 with one function:
 
 ```python
-def extract(repo_root: str) -> list[dict]:
-    ...
+def extract(repo_root: str) -> list[dict]: ...
 ```
 
 Copy [`skills/deviant/scripts/detectors/_template.py`](skills/deviant/scripts/detectors/_template.py),
