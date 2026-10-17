@@ -1,0 +1,32 @@
+name: New check idea
+description: Suggest something Deviant should look for, or say you want to build it.
+title: "Check: "
+labels: ["detector"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A check finds the one item that differs from its neighbours. It works when you can
+        finish the sentence "every X should have a Y".
+  - type: input
+    id: sentence
+    attributes:
+      label: "Every ... should have ..."
+      placeholder: every Kubernetes container should set a memory limit
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: What the code looks like
+      description: A short example of an item that follows the rule, and one that breaks it.
+  - type: dropdown
+    id: build
+    attributes:
+      label: Do you want to build it?
+      options:
+        - Yes, I will build it
+        - I would like help building it
+        - No, I am only suggesting it
+    validations:
+      required: true

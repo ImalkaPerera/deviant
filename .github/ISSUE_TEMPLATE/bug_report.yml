@@ -1,0 +1,30 @@
+name: Bug report
+description: Something crashed, hung, or behaved wrongly.
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got. Include the full error if there was one.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      render: bash
+      placeholder: python skills/deviant/scripts/mine.py --repo . --with-git
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      placeholder: Python 3.12, Windows 11
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Deviant version or commit

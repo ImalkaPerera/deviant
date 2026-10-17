@@ -1,0 +1,39 @@
+name: False alarm
+description: Deviant flagged something that is fine. These reports help the most.
+title: "False alarm: "
+labels: ["false-alarm"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Reports from real projects are the most useful thing you can send.
+        Please do not paste secrets or private code. A short excerpt is enough.
+  - type: textarea
+    id: output
+    attributes:
+      label: What Deviant reported
+      description: Paste the output for the finding, with `--with-git` if you used it.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why-fine
+    attributes:
+      label: Why it is fine
+      description: For example, a public route on purpose, or auth applied somewhere Deviant did not look.
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: Framework and version
+      placeholder: FastAPI 0.115, GitHub Actions
+  - type: input
+    id: project
+    attributes:
+      label: Project, if it is open source
+      placeholder: https://github.com/owner/repo
+  - type: input
+    id: version
+    attributes:
+      label: Deviant version or commit
