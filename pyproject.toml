@@ -6,6 +6,23 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = []
+keywords = ["static-analysis", "bug-detection", "code-quality", "fastapi", "github-actions", "claude-code", "ai-agents"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Quality Assurance",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+Homepage = "https://github.com/ImalkaPerera/deviant"
+Documentation = "https://github.com/ImalkaPerera/deviant/tree/main/docs"
+Issues = "https://github.com/ImalkaPerera/deviant/issues"
 
 [project.optional-dependencies]
 yaml = ["PyYAML>=6"]
