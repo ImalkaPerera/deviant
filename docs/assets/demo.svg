@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="350" viewBox="0 0 980 350" role="img" aria-labelledby="t d">
+  <title id="t">An example Deviant scan</title>
+  <desc id="d">Terminal output. Deviant reports that 47 of 48 routes check auth, shows the one that does not, app/routes/items.py line 244, who last changed it, and that the same author wrote all 47 routes that do check.</desc>
+  <rect x="1" y="1" width="978" height="348" rx="14" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
+  <path d="M 1 15 A 14 14 0 0 1 15 1 H 965 A 14 14 0 0 1 979 15 V 46 H 1 Z" fill="#161b22"/>
+  <line x1="1" y1="46" x2="979" y2="46" stroke="#30363d" stroke-width="1.5"/>
+  <circle cx="30" cy="24" r="7" fill="#ff5f56"/><circle cx="54" cy="24" r="7" fill="#ffbd2e"/><circle cx="78" cy="24" r="7" fill="#27c93f"/>
+  <text x="490" y="29" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#6e7681">~/api  —  example scan</text>
+  <g font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="16">
+    <text x="36" y="92" xml:space="preserve"><tspan fill="#3fb950">$</tspan> <tspan fill="#f0f6fc">python skills/deviant/scripts/mine.py --repo . --with-git</tspan></text>
+<text x="36" y="144" xml:space="preserve"><tspan fill="#f0f6fc" font-weight="700">python_routes.fastapi_routes:app/routes.</tspan><tspan fill="#388bfd" font-weight="700">has_auth</tspan>  <tspan fill="#6e7681">n=</tspan><tspan fill="#9da7b3">48</tspan> <tspan fill="#6e7681">s=</tspan><tspan fill="#3fb950">47</tspan> <tspan fill="#6e7681">v=</tspan><tspan fill="#f78166">1</tspan> <tspan fill="#6e7681">wlb95=</tspan><tspan fill="#9da7b3">0.891</tspan></text>
+<text x="36" y="170" xml:space="preserve" fill="#9da7b3">  In fastapi_routes:app/routes, has_auth is true</text>
+<rect x="22" y="177" width="5" height="102" rx="2.5" fill="#f78166"/>
+<text x="36" y="196" xml:space="preserve"><tspan fill="#6e7681">  exception:</tspan> <tspan fill="#f78166" font-weight="700">app/routes/items.py:244</tspan> <tspan fill="#f0f6fc">(POST /api/v1/users/export)</tspan></text>
+<text x="36" y="222" xml:space="preserve"><tspan fill="#6e7681">    last changed:</tspan> <tspan fill="#9da7b3">52c027b 2026-10-17 by</tspan> <tspan fill="#f0f6fc">dana@example.com</tspan></text>
+<text x="36" y="248" xml:space="preserve"><tspan fill="#6e7681">    commit:</tspan> <tspan fill="#f0f6fc">add csv export</tspan></text>
+<text x="36" y="274" xml:space="preserve"><tspan fill="#6e7681">    same author wrote</tspan> <tspan fill="#3fb950" font-weight="700">47 of the 47</tspan> <tspan fill="#6e7681">compliant items checked</tspan></text>
+  </g>
+  <line x1="36" y1="298" x2="944" y2="298" stroke="#30363d" stroke-width="1"/>
+  <text x="36" y="320" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#9da7b3">The same person wrote all 47 routes that do check auth, so this looks like a slip, not a choice.</text>
+</svg>

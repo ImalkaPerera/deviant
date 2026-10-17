@@ -1,26 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
-  <title id="title">Deviant</title>
-  <desc id="desc">A grid of identical blue dots with one orange dot out of line, next to the text: Deviant. Catch the one route that forgot its auth check.</desc>
-  <rect x="1" y="1" width="1198" height="318" rx="20" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="t d">
+  <title id="t">Deviant</title>
+  <desc id="d">A grid of identical blue dots with one orange dot out of line, labelled POST /users/export, no auth check. Next to it: Deviant. Catch the one route that forgot its auth check.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1117"/><stop offset="1" stop-color="#161b22"/></linearGradient>
+    <radialGradient id="glow" cx="996" cy="132" r="150" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f78166" stop-opacity="0.30"/><stop offset="1" stop-color="#f78166" stop-opacity="0"/></radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#388bfd"/><stop offset="1" stop-color="#f78166"/></linearGradient>
+  </defs>
+  <rect x="1" y="1" width="1198" height="338" rx="22" fill="url(#bg)" stroke="#30363d" stroke-width="2"/>
+  <rect x="1" y="1" width="1198" height="338" rx="22" fill="url(#glow)"/>
 
   <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-    <text x="64" y="140" font-size="84" font-weight="700" fill="#f0f6fc">Deviant</text>
-    <text x="68" y="190" font-size="24" fill="#c9d1d9">Catch the one route that forgot its auth check.</text>
-    <text x="68" y="228" font-size="16" fill="#8b949e">Finds bugs by spotting code that breaks your project's own patterns.</text>
+    <text x="68" y="150" font-size="92" font-weight="800" fill="#f0f6fc" letter-spacing="-2">Deviant</text>
+    <rect x="72" y="166" width="150" height="5" rx="2.5" fill="url(#accent)"/>
+    <text x="70" y="212" font-size="26" font-weight="500" fill="#e6edf3">Catch the one route that forgot its auth check.</text>
+    <text x="70" y="244" font-size="17" fill="#9da7b3">Finds bugs by spotting code that breaks your project's own patterns.</text>
+  </g>
+  <g font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#9da7b3">
+    <rect x="70" y="272" width="86" height="30" rx="15" fill="none" stroke="#30363d" stroke-width="1.5"/><text x="113" y="292" text-anchor="middle">FastAPI</text>
+    <rect x="166" y="272" width="130" height="30" rx="15" fill="none" stroke="#30363d" stroke-width="1.5"/><text x="231" y="292" text-anchor="middle">GitHub Actions</text>
+    <rect x="306" y="272" width="118" height="30" rx="15" fill="none" stroke="#30363d" stroke-width="1.5"/><text x="365" y="292" text-anchor="middle">Git evidence</text>
   </g>
 
-  <!-- 8 columns by 4 rows of dots, spaced 56 apart. The dot at column 5, row 1 is left out
-       of the grid and drawn separately, nudged out of line. -->
-  <g fill="#388bfd" fill-opacity="0.6">
-    <circle cx="700" cy="70" r="9"/><circle cx="756" cy="70" r="9"/><circle cx="812" cy="70" r="9"/><circle cx="868" cy="70" r="9"/><circle cx="924" cy="70" r="9"/><circle cx="980" cy="70" r="9"/><circle cx="1036" cy="70" r="9"/><circle cx="1092" cy="70" r="9"/>
-    <circle cx="700" cy="126" r="9"/><circle cx="756" cy="126" r="9"/><circle cx="812" cy="126" r="9"/><circle cx="868" cy="126" r="9"/><circle cx="924" cy="126" r="9"/><circle cx="1036" cy="126" r="9"/><circle cx="1092" cy="126" r="9"/>
-    <circle cx="700" cy="182" r="9"/><circle cx="756" cy="182" r="9"/><circle cx="812" cy="182" r="9"/><circle cx="868" cy="182" r="9"/><circle cx="924" cy="182" r="9"/><circle cx="980" cy="182" r="9"/><circle cx="1036" cy="182" r="9"/><circle cx="1092" cy="182" r="9"/>
-    <circle cx="700" cy="238" r="9"/><circle cx="756" cy="238" r="9"/><circle cx="812" cy="238" r="9"/><circle cx="868" cy="238" r="9"/><circle cx="924" cy="238" r="9"/><circle cx="980" cy="238" r="9"/><circle cx="1036" cy="238" r="9"/><circle cx="1092" cy="238" r="9"/>
-  </g>
+  <g><circle cx="690" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="748" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="806" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="864" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="922" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="980" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="1038" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="1096" cy="62" r="9" fill="#388bfd" fill-opacity="0.78"/><circle cx="690" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="748" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="806" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="864" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="922" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="1038" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="1096" cy="120" r="9" fill="#388bfd" fill-opacity="0.66"/><circle cx="690" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="748" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="806" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="864" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="922" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="980" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="1038" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="1096" cy="178" r="9" fill="#388bfd" fill-opacity="0.54"/><circle cx="690" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="748" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="806" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="864" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="922" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="980" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="1038" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/><circle cx="1096" cy="236" r="9" fill="#388bfd" fill-opacity="0.42"/></g>
 
-  <!-- the deviant -->
-  <circle cx="994" cy="140" r="22" fill="none" stroke="#f78166" stroke-opacity="0.45" stroke-width="2"/>
-  <circle cx="994" cy="140" r="10" fill="#f78166"/>
-
-  <text x="700" y="288" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#8b949e">Everything follows the pattern. One thing doesn't.</text>
+  <circle cx="996" cy="132" r="26" fill="none" stroke="#f78166" stroke-opacity="0.35" stroke-width="2"/>
+  <circle cx="996" cy="132" r="11" fill="#f78166"/>
+  <path d="M 996 162 L 996 262" stroke="#f78166" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="4 5" fill="none"/>
+  <rect x="838" y="262" width="316" height="32" rx="8" fill="#2a1a17" stroke="#f78166" stroke-opacity="0.6" stroke-width="1.5"/>
+  <text x="996" y="283" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="14" fill="#f78166">POST /users/export  ·  no auth check</text>
 </svg>
