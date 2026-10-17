@@ -28,8 +28,31 @@ service method is documented as being for anonymous users. A judge reading that 
 label the exception intentional, which is the kind of proof the planned judge step is meant
 to look for.
 
-So far we have **not** found a confirmed bug in someone else's project, and we have not
-measured how often Deviant is right. A published benchmark is on the [roadmap](../README.md#roadmap).
+## A scan of 577 public FastAPI projects
+
+We then ran the FastAPI check on 577 public projects found by searching GitHub (547 scanned
+successfully; 30 could not be cloned). Scanning only reads the code. It never runs or
+imports it. Every candidate was read by hand and given one of these labels:
+
+| Label | Meaning | Count |
+|---|---|---|
+| Looks like a real gap | A route with no auth where the author protected every sampled sibling | 8 in 3 projects |
+| Unsure | Probably harmless, or a prototype, but we could not tell from the code | 20 in 10 projects |
+| Intentional | Login, registration, health, webhooks and similar routes that cannot require a session | 49 in 29 projects |
+| False alarm | Auth the tool failed to see | 5 in 3 projects |
+| Style only | A route missing a `response_model` | 47 in 24 projects |
+
+Counting only auth and rate-limit candidates, **8 of 82 (10%)** looked like real gaps, and
+28 of 82 (34%) were either that or unsure. The first version of this scan scored 3 of 88
+(3%). The difference came from fixing the false alarms the scan exposed, listed below.
+
+For two of the three projects with a real gap, git history shows the same author protected all 50
+sampled routes elsewhere, which points to a forgotten check rather than a choice. We are
+not naming those projects here. Details stay private until their maintainers have had a
+chance to fix them.
+
+These are our readings, not proof: we did not run any project, so a route we call a gap
+may be protected by something outside the code we read, such as a gateway.
 
 ## Why it reports so little
 
@@ -50,6 +73,8 @@ small examples did not. All of these are fixed, and each has a regression test.
 | 11 unpinned actions reported in ruff | Local reusable workflows written as `$/...` were treated as third-party | Treat them as local |
 | Polar's Python 3.14 code could not be read | `except A, B:` without parentheses is new syntax | Read it on older Pythons too, and warn when a file cannot be parsed |
 | Git showed an unrelated commit as the author | A shallow clone blames every old line on its newest commit | Mark that evidence as truncated |
+| About 90% of auth candidates in the 577-project scan were not bugs | Auth done in the route body (raising 401/403, `compare_digest`, `jwt.decode`), by a helper function, by a header or key parameter, by a `get_current_*` or `...Dependency()` factory, or not needed on login and health routes | Recognise each, with tests that check a real unprotected route is still reported |
+| A return annotation, `204`, `response_class` or `include_in_schema=False` was reported as a missing `response_model` | The check only looked for `response_model=` | Count those as declared |
 | A Docker image pinned by digest was reported as unpinned (found in code review, not on a real project) | Only 40-character SHAs were accepted | Accept `sha256:` digests |
 
 ## Try it on your project

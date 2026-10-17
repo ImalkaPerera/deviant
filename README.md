@@ -128,7 +128,7 @@ Deviant does not replace your linter or your reviewers. It finds what only count
 
 We publish what Deviant got wrong, not only what it got right.
 
-- **Seven real projects scanned,** and the results read by hand.
+- **577 real projects scanned,** and every candidate read by hand.
 - **One candidate at the default settings.** It turned out to be intentional: the project's own
   test asserts that the route is public.
 - **Six problems found and fixed** while reading real results and reviewing the code, each with a
