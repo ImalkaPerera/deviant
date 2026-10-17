@@ -1,0 +1,14 @@
+{
+  "name": "deviant",
+  "description": "Deviant: find the one thing in your code that breaks the pattern.",
+  "owner": {
+    "name": "ImalkaPerera"
+  },
+  "plugins": [
+    {
+      "name": "deviant",
+      "source": "./",
+      "description": "Finds likely bugs where code breaks the project's own patterns, then judges each exception as bug, intentional or unsure."
+    }
+  ]
+}

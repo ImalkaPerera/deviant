@@ -1,0 +1,13 @@
+{
+  "name": "deviant",
+  "version": "0.0.1",
+  "description": "Finds likely bugs where code breaks the project's own patterns, and judges each exception as bug, intentional or unsure using the code, tests and git history.",
+  "author": {
+    "name": "ImalkaPerera",
+    "url": "https://github.com/ImalkaPerera"
+  },
+  "homepage": "https://github.com/ImalkaPerera/deviant",
+  "repository": "https://github.com/ImalkaPerera/deviant",
+  "license": "MIT",
+  "keywords": ["static-analysis", "bug-detection", "code-quality", "fastapi", "github-actions", "code-review"]
+}
