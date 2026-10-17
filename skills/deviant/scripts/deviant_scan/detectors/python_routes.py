@@ -243,6 +243,10 @@ class _Found:
         self.imports: list[ast.Import | ast.ImportFrom] = []
         self.include_calls: list[tuple[tuple, ast.Call]] = []
         self.api_route_calls: list[tuple[tuple, ast.Call]] = []
+        # `self.router = APIRouter()` inside a class: (class id, "self.router", value).
+        self.attr_assigned: list[tuple[int, str, ast.expr]] = []
+        # The class a function or call sits in, by id of the node, for `self.` lookups.
+        self.enclosing_class: dict[int, int] = {}
 
 
 def _assigned_name(node):
@@ -266,17 +270,38 @@ def _assigned_name(node):
 _STATEMENT_LISTS = ("body", "orelse", "finalbody", "handlers", "cases")
 
 
+def _self_attribute(node):
+    """("self.name", value) for `self.name = value` or `self.name: T = value`, else None."""
+    if isinstance(node, ast.Assign) and len(node.targets) == 1:
+        target = node.targets[0]
+    elif isinstance(node, ast.AnnAssign) and node.value is not None:
+        target = node.target
+    else:
+        return None
+    if (
+        isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == "self"
+    ):
+        return f"self.{target.attr}", node.value
+    return None
+
+
 def _collect(tree: ast.Module) -> _Found:
     found = _Found()
-    stack: list[tuple[ast.AST, tuple]] = [(tree, ())]
+    # Each entry is (node, scope, id of the enclosing class or None).
+    stack: list[tuple[ast.AST, tuple, int | None]] = [(tree, (), None)]
     while stack:  # a loop, not recursion, so deeply nested code cannot overflow the stack
-        node, scope = stack.pop()
-        inner = scope
+        node, scope, owner = stack.pop()
+        inner, inner_owner = scope, owner
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             found.functions.append((scope, node))
+            if owner is not None:
+                found.enclosing_class[id(node)] = owner
             inner = scope + (id(node),)
         elif isinstance(node, ast.ClassDef):
             found.classes.append(node)
+            inner_owner = id(node)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             found.imports.append(node)
         elif isinstance(node, ast.Expr):
@@ -288,14 +313,19 @@ def _collect(tree: ast.Module) -> _Found:
                     found.include_calls.append((scope, call))
                 elif call.func.attr == "add_api_route":
                     found.api_route_calls.append((scope, call))
+                if owner is not None:
+                    found.enclosing_class[id(call)] = owner
         elif isinstance(node, _ASSIGNMENTS):
             assigned = _assigned_name(node)
             if assigned is not None:
                 found.assigned.append((scope, assigned[0], assigned[1]))
+            attribute = _self_attribute(node) if owner is not None else None
+            if attribute is not None:
+                found.attr_assigned.append((owner, attribute[0], attribute[1]))
         for field in _STATEMENT_LISTS:
             children = getattr(node, field, None)
             if children:
-                stack.extend((child, inner) for child in children)
+                stack.extend((child, inner, inner_owner) for child in children)
     return found
 
 
@@ -360,7 +390,15 @@ class _Symbols:
         self.routers: dict[tuple, dict] = {}
         self._build()
         # Functions that check credentials in their own body, so a route that calls one is guarded.
-        self.auth_helpers = {fn.name for fn in self.functions.values() if _body_does_auth(fn)}
+        # Calls are matched by name, so a name counts only if every function with it does auth.
+        # Route handlers are left out: a handler is often named like the manager method it calls.
+        definitions: dict[str, list] = {}
+        for fn in self.functions.values():
+            if not any(_route_decorator(d) for d in fn.decorator_list):
+                definitions.setdefault(fn.name, []).append(fn)
+        self.auth_helpers = {
+            name for name, fns in definitions.items() if all(_body_does_auth(fn) for fn in fns)
+        }
 
     def _build(self):
         for rel, info in self.found.items():
@@ -383,18 +421,32 @@ class _Symbols:
                         {"deps": self.keyword_dependencies(value, rel), "parents": []},
                     )
         for rel, info in self.found.items():
+            for owner, name, value in info.attr_assigned:
+                if isinstance(value, ast.Call) and _last_name(value.func) in self.router_calls[rel]:
+                    self.routers.setdefault(
+                        (rel, (owner,), name),
+                        {"deps": self.keyword_dependencies(value, rel), "parents": []},
+                    )
+        for rel, info in self.found.items():
             for scope, call in info.include_calls:
-                child = self.find(call.args[0], rel, scope, self.routers)
+                owner = info.enclosing_class.get(id(call))
+                child = self.find(call.args[0], rel, scope, self.routers, owner)
                 if child is None:
                     continue
-                parent = self.find(call.func.value, rel, scope, self.routers)
+                parent = self.find(call.func.value, rel, scope, self.routers, owner)
                 added = self.keyword_dependencies(call, rel)
                 self.routers[child]["parents"].append((parent, added))
 
     # -- finding a name's definition --
 
-    def find(self, expr, rel, scope, table):
-        """The key in table that a Name or dotted attribute refers to, or None."""
+    def find(self, expr, rel, scope, table, owner=None):
+        """The key in table that a Name or dotted attribute refers to, or None.
+
+        owner is the id of the class the expression sits in, used to resolve `self.name`.
+        """
+        if _is_self_attribute(expr):
+            key = (rel, (owner,), f"self.{expr.attr}")
+            return key if owner is not None and key in table else None
         if isinstance(expr, ast.Name):
             for depth in range(len(scope), -1, -1):
                 key = (rel, scope[:depth], expr.id)
@@ -539,6 +591,14 @@ def _is_name(node) -> bool:
     return isinstance(node, (ast.Name, ast.Attribute))
 
 
+def _is_self_attribute(node) -> bool:
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "self"
+    )
+
+
 # --- routes -------------------------------------------------------------------------------
 
 
@@ -549,8 +609,9 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
             route = _route_decorator(dec)
             if route is None:
                 continue
-            router_name, methods, path = route
-            key = symbols.find(ast.Name(id=router_name), rel, scope, symbols.routers)
+            router, methods, path = route
+            owner = info.enclosing_class.get(id(node))
+            key = symbols.find(router, rel, scope, symbols.routers, owner)
             if key is None:
                 continue
             names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(dec, rel)
@@ -574,7 +635,8 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     )
                 )  # fmt: skip
     for scope, call in info.api_route_calls:
-        key = symbols.find(call.func.value, rel, scope, symbols.routers)
+        owner = info.enclosing_class.get(id(call))
+        key = symbols.find(call.func.value, rel, scope, symbols.routers, owner)
         if key is None:
             continue
         names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(call, rel)
@@ -821,11 +883,14 @@ def _folder(rel: str) -> str:
 
 
 def _route_decorator(dec):
-    """Return (router variable, HTTP methods, path) for @router.get("/x") style decorators."""
+    """Return (router expression, HTTP methods, path) for @router.get("/x") style decorators.
+
+    The router is a plain name, or `self.router` inside a class.
+    """
     if not (
         isinstance(dec, ast.Call)
         and isinstance(dec.func, ast.Attribute)
-        and isinstance(dec.func.value, ast.Name)
+        and (isinstance(dec.func.value, ast.Name) or _is_self_attribute(dec.func.value))
     ):
         return None
     attr = dec.func.attr
@@ -836,7 +901,7 @@ def _route_decorator(dec):
     else:
         return None
     path = _string(dec.args[0] if dec.args else _keyword(dec, "path"))
-    return dec.func.value.id, methods, path
+    return dec.func.value, methods, path
 
 
 def _methods(expr, default):

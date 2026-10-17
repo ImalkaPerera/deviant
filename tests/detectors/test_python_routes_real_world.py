@@ -368,3 +368,114 @@ def test_a_dependency_factory_called_in_the_route_counts(tmp_path):
         "has_auth",
     )
     assert result == {"POST /a": True, "POST /b": True, "POST /c": False}
+
+
+def test_a_helper_name_shared_with_a_function_that_checks_nothing_is_not_trusted(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "helpers/a.py": """
+            def check(request):
+                raise HTTPException(status_code=401)
+            """,
+            "helpers/b.py": """
+            def check(request):
+                return 1
+            """,
+            "routes.py": """
+            from fastapi import APIRouter
+            router = APIRouter()
+
+            @router.post("/a")
+            def a(request):
+                check(request)
+            """,
+        },
+    )
+    assert result == {"POST /a": False}
+
+
+def test_a_helper_name_defined_twice_that_always_checks_credentials_is_trusted(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "helpers/a.py": """
+            def check(request):
+                raise HTTPException(status_code=401)
+            """,
+            "helpers/b.py": """
+            def check(request):
+                raise HTTPException(status_code=403)
+            """,
+            "routes.py": """
+            from fastapi import APIRouter
+            router = APIRouter()
+
+            @router.post("/a")
+            def a(request):
+                check(request)
+            """,
+        },
+    )
+    assert result == {"POST /a": True}
+
+
+def test_a_router_stored_on_self_is_followed_and_classes_do_not_mix(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "a.py": """
+            from fastapi import APIRouter, Depends
+            from app.auth import get_current_user
+
+            class Users:
+                def __init__(self):
+                    self.router = APIRouter(dependencies=[Depends(get_current_user)])
+                    self.router.add_api_route("/a", self.a, methods=["POST"])
+
+                def a(self): ...
+
+            class Open:
+                def __init__(self):
+                    self.router = APIRouter()
+
+                def routes(self):
+                    @self.router.post("/b")
+                    def b(): ...
+            """
+        },
+    )
+    assert result == {"POST /a": True, "POST /b": False}
+
+
+def auth_in_project(tmp_path, files):
+    import textwrap
+
+    for relative, source in files.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(textwrap.dedent(source), encoding="utf-8")
+    items = pr.extract(str(tmp_path))
+    return {i["item_id"]: i["features"]["has_auth"] for i in items}
+
+
+def test_a_route_handler_named_like_the_manager_method_it_calls_still_counts_as_guarded(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "manager.py": """
+            class Manager:
+                async def reset_password(self, token):
+                    jwt.decode(token)
+            """,
+            "router.py": """
+            from fastapi import APIRouter
+            router = APIRouter()
+
+            @router.post("/reset-password")
+            async def reset_password(token: str, manager):
+                await manager.reset_password(token)
+            """,
+        },
+    )
+    assert result == {"POST /reset-password": True}
