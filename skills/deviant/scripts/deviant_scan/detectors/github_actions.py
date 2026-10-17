@@ -94,11 +94,14 @@ def _workflow_items(rel, data, text):
     jobs = data.get("jobs") if isinstance(data.get("jobs"), dict) else {}
     items = [_workflow_item(rel, data, jobs)]
     jobs_line = _line_of(lines, r"^['\"]?jobs['\"]?\s*:", regex=True)
+    # Job ids sit at one indent. Matching only that indent keeps a nested key with the same
+    # name, such as a matrix variable, from being taken for the job.
+    indent = _first_child_indent(lines, jobs_line)
     for job_id, job in jobs.items():
         if not isinstance(job, dict):
             continue
         key = re.escape(str(job_id))
-        job_line = _line_of(lines, rf"^\s+['\"]?{key}['\"]?\s*:", start=jobs_line, regex=True)
+        job_line = _line_of(lines, rf"^{indent}['\"]?{key}['\"]?\s*:", start=jobs_line, regex=True)
         if isinstance(job.get("uses"), str):
             # A call to a reusable workflow has no timeout or steps of its own,
             # but the workflow it calls should be pinned like any action.
@@ -197,6 +200,15 @@ def _is_local(uses: str) -> bool:
     "./" is the usual form. "$/" is what cargo-dist writes for the same thing.
     """
     return uses.startswith(("./", "$/"))
+
+
+def _first_child_indent(lines, parent_line):
+    """Regex for the indent of the first line under a key; any indent if there is none."""
+    for text in lines[parent_line:]:
+        stripped = text.strip()
+        if stripped and not stripped.startswith("#"):
+            return f" {{{len(text) - len(text.lstrip(' '))}}}"
+    return r"\s+"
 
 
 def _line_of(lines, needle, start=0, regex=False):

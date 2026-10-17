@@ -270,3 +270,24 @@ def test_composite_and_workflow_steps_share_one_group(tmp_path):
     write(tmp_path, ".github/workflows/w.yml", WORKFLOW)
     files = {i["file"] for i in by_group(extract(tmp_path), "gha_third_party_steps")}
     assert files == {".github/actions/setup/action.yml", ".github/workflows/w.yml"}
+
+
+def test_a_job_named_like_an_earlier_nested_key_gets_its_own_line(tmp_path):
+    text = (
+        "name: w\n"
+        "jobs:\n"
+        "  test:\n"
+        "    runs-on: x\n"
+        "    strategy:\n"
+        "      matrix:\n"
+        "        build: [a, b]\n"
+        "    steps:\n"
+        "      - run: echo hi\n"
+        "  build:\n"
+        "    runs-on: x\n"
+        "    steps:\n"
+        "      - run: echo build\n"
+    )
+    write(tmp_path, ".github/workflows/w.yml", text)
+    lines = {i["item_id"]: i["line"] for i in by_group(extract(tmp_path), "gha_jobs")}
+    assert lines == {"test": 3, "build": 10}
