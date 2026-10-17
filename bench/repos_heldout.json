@@ -1,0 +1,53 @@
+{
+  "selected_on": "2026-10-17",
+  "purpose": "A second set of repos, kept apart from bench/repos.json, for changing and checking the detectors. None of these repos is in the benchmark set or in docs/tested-on-real-projects.md. Use the tune group to change detectors and the validate group only to check the result, so a change is never measured on the repos it was made on.",
+  "rule": "Group sizes come from the detector's extract() for counting only. A repo is usable only if it has a group the detector can report on: 20 or more routes in one folder, or 20 or more CI jobs.",
+  "finding": "Most permissively licensed FastAPI projects fail that floor. Of 19 candidates cloned, three have a folder with 20 or more routes, and two have 20 or more CI jobs. The set is small because the detector's own floor excludes most projects.",
+  "repos": [
+    {
+      "name": "fastapi-practices/fastapi-best-architecture",
+      "url": "https://github.com/fastapi-practices/fastapi-best-architecture",
+      "commit": "514211d7f827708717f96b0420db5085e6572460",
+      "kind": "fastapi",
+      "licence": "MIT",
+      "group": "tune",
+      "counted": {"routes": 138, "largest_folder_routes": 58}
+    },
+    {
+      "name": "JakubPluta/gymhero",
+      "url": "https://github.com/JakubPluta/gymhero",
+      "commit": "890b0db70d58a59d7589af34aff8bd58b5b876a2",
+      "kind": "fastapi",
+      "licence": "MIT",
+      "group": "tune",
+      "counted": {"routes": 61, "largest_folder_routes": 59}
+    },
+    {
+      "name": "remsky/Kokoro-FastAPI",
+      "url": "https://github.com/remsky/Kokoro-FastAPI",
+      "commit": "ebd4ec9cc97b258b25afc39444a5e1701055db50",
+      "kind": "fastapi",
+      "licence": "Apache-2.0",
+      "group": "validate",
+      "counted": {"routes": 23, "largest_folder_routes": 21}
+    },
+    {
+      "name": "datamodel-code-generator/datamodel-code-generator",
+      "url": "https://github.com/datamodel-code-generator/datamodel-code-generator",
+      "commit": "723f9e38523e074182674adeac3a8c6fcdf3d955",
+      "kind": "github_actions",
+      "licence": "MIT",
+      "group": "tune",
+      "counted": {"jobs": 45, "jobs_with_timeout": 2}
+    },
+    {
+      "name": "docarray/docarray",
+      "url": "https://github.com/docarray/docarray",
+      "commit": "f5fc0f6d5f3dcb0201dc735262ef3256bdf054b9",
+      "kind": "github_actions",
+      "licence": "Apache-2.0",
+      "group": "validate",
+      "counted": {"jobs": 25, "jobs_with_timeout": 0}
+    }
+  ]
+}

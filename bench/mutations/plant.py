@@ -1,6 +1,6 @@
 """Plant known bugs in pinned copies of the benchmark repos, and record each one.
 
-Usage: python plant.py <clones dir> <out dir>
+Usage: python plant.py <clones dir> <out dir> [repos file]
 
 <clones dir> holds one shallow clone per repo, named owner__repo, at the commit in repos.json.
 <out dir> receives a mutated copy per repo, plus manifest.json. Nothing is written to the
@@ -364,12 +364,13 @@ def plant_gha_other(root, manifest, repo):
 
 
 def main(argv):
-    if len(argv) != 3:
+    if len(argv) not in (3, 4):
         print(__doc__)
         return 2
     clones, out = Path(argv[1]), Path(argv[2])
+    repos_file = Path(argv[3]) if len(argv) == 4 else HERE.parent / "repos.json"
     out.mkdir(parents=True, exist_ok=True)
-    data = json.loads((HERE.parent / "repos.json").read_text(encoding="utf-8"))
+    data = json.loads(repos_file.read_text(encoding="utf-8"))
     manifest, problems = [], []
     for repo in data["repos"]:
         name = repo["name"]
