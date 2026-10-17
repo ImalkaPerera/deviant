@@ -1,0 +1,151 @@
+{
+ "selected_on": "2026-10-17",
+ "rule": "Not used to write or tune detectors. FastAPI route counts come from the detector's extract() for counting only. GitHub Actions counts come from parsing the workflow YAML directly.",
+ "repos": [
+  {
+   "name": "IBM/mcp-context-forge",
+   "url": "https://github.com/IBM/mcp-context-forge",
+   "commit": "86af292eeea89c155b437758b52e3b4b83fb9702",
+   "kind": "fastapi",
+   "counted": {
+    "routes": 727
+   },
+   "licence": "Apache-2.0"
+  },
+  {
+   "name": "TracecatHQ/tracecat",
+   "url": "https://github.com/TracecatHQ/tracecat",
+   "commit": "0c0b9e3c0e0afe7baab18c7e9d63e9156fbcf5ab",
+   "kind": "fastapi",
+   "counted": {
+    "routes": 751
+   },
+   "licence": "AGPL-3.0"
+  },
+  {
+   "name": "evroon/bracket",
+   "url": "https://github.com/evroon/bracket",
+   "commit": "d3885edc2a743f2789340ce5a199112bcfcd0220",
+   "kind": "fastapi",
+   "counted": {
+    "routes": 61
+   },
+   "licence": "AGPL-3.0"
+  },
+  {
+   "name": "gamosoft/NoteDiscovery",
+   "url": "https://github.com/gamosoft/NoteDiscovery",
+   "commit": "95df96134f92ecdba68715aac6c386d75333477e",
+   "kind": "fastapi",
+   "counted": {
+    "routes": 50
+   },
+   "licence": "MIT"
+  },
+  {
+   "name": "Anil-matcha/open-agent-email",
+   "url": "https://github.com/Anil-matcha/open-agent-email",
+   "commit": "6b9a514ca8df9e88a2540189197f52d407f012b0",
+   "kind": "fastapi",
+   "counted": {
+    "routes": 143
+   },
+   "licence": "Apache-2.0"
+  },
+  {
+   "name": "psf/black",
+   "url": "https://github.com/psf/black",
+   "commit": "11cff1312bf96e02bce9a467d0b5a2dd65300642",
+   "kind": "github_actions",
+   "counted": {
+    "jobs": 28,
+    "third_party_steps": 74
+   },
+   "licence": "MIT"
+  },
+  {
+   "name": "pytest-dev/pytest",
+   "url": "https://github.com/pytest-dev/pytest",
+   "commit": "cb6ff97bcb147f2bb5d9e0072c424dc03a452ba1",
+   "kind": "github_actions",
+   "counted": {
+    "jobs": 12,
+    "third_party_steps": 24
+   },
+   "licence": "MIT"
+  },
+  {
+   "name": "python/mypy",
+   "url": "https://github.com/python/mypy",
+   "commit": "9f5e075be1fa96d2e8c1e225f43bf664ae56c9af",
+   "kind": "github_actions",
+   "counted": {
+    "jobs": 9,
+    "third_party_steps": 20
+   },
+   "licence": "MIT"
+  },
+  {
+   "name": "pallets/click",
+   "url": "https://github.com/pallets/click",
+   "commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+   "kind": "github_actions",
+   "counted": {
+    "jobs": 10,
+    "third_party_steps": 27
+   },
+   "licence": "BSD-3-Clause"
+  },
+  {
+   "name": "httpie/cli",
+   "url": "https://github.com/httpie/cli",
+   "commit": "5b604c37c6c67e18e7c3e9aee6c88a8c22b98345",
+   "kind": "github_actions",
+   "counted": {
+    "jobs": 15,
+    "third_party_steps": 36
+   },
+   "licence": "BSD-3-Clause"
+  }
+ ],
+ "selection": "Hand-picked from GitHub search results (most-starred first), not a random sample. Chosen to be mature, public, and to meet the size rules in plan section 11.1.",
+ "counting": "FastAPI: routes = items from python_routes.extract(). GitHub Actions: jobs and third-party uses from github_actions.extract(), which also reads composite actions.",
+ "past_bug_candidates": [
+  {
+   "repo": "evroon/bracket",
+   "commit": "1044914a48ca990d50ba5c5a7556d023287e11d9",
+   "date": "2026-04-14",
+   "what": "Auth check fix. The change is recorded in the commit; details are withheld until disclosure.",
+   "verified": "Diff read.",
+   "detector_on_pre_fix_code": "Not detected by the current auth check."
+  },
+  {
+   "repo": "python/mypy",
+   "commit": "8c1880f48",
+   "date": "2026-09-01",
+   "what": "Replaced unpinned GitHub Actions tags with commit SHAs.",
+   "verified": "Diff read."
+  },
+  {
+   "repo": "psf/black",
+   "commit": "23b8127",
+   "date": "2025-12-09",
+   "what": "Pinned all GitHub Actions references.",
+   "verified": "Diff read."
+  },
+  {
+   "repo": "pytest-dev/pytest",
+   "commit": "76ee187a4",
+   "date": "2025-05-12",
+   "what": "Pinned actions to exact hashes.",
+   "verified": "Diff read."
+  },
+  {
+   "repo": "TracecatHQ/tracecat",
+   "commit": "0fe9c9827",
+   "date": "2026-03-25",
+   "what": "Pinned GitHub Actions SHAs.",
+   "verified": "Diff read."
+  }
+ ]
+}
