@@ -7,7 +7,7 @@ Deviant counts what your code already does and reports the rare items that diffe
 | 1. Group | Detectors list similar items, such as all FastAPI routes or all CI jobs. | ✅ Built |
 | 2. Count | Plain math finds patterns like "47 of 48 do X". Same input, same output. No AI. | ✅ Built |
 | 3. Evidence | Each exception gets its git history: who last changed the line, when, why, and how many of the protected items that same author wrote. | ✅ Built (`--with-git`) |
-| 4. Judge | Claude reads the evidence, comments and tests, and labels each exception BUG, INTENTIONAL or UNSURE with proof. | 🚧 Planned |
+| 4. Judge | Claude reads the evidence, comments and tests, and labels each exception BUG, INTENTIONAL or UNSURE with proof. | ✅ Built ([Claude Code skill](claude-code-skill.md)) |
 | 5. Approve | You choose which rules to keep. | 🚧 Planned |
 | 6. Enforce | Approved rules become permanent checks. | 🚧 Planned |
 | 7. Guard | A Claude Code hook checks each AI edit and warns when a rule is broken. | 🚧 Planned |

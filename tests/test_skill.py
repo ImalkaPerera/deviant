@@ -208,10 +208,11 @@ def test_plugin_name_is_kebab_case_and_not_reserved():
 
 
 def test_plugin_version_matches_the_package_version():
-    import tomllib
-
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert load("plugin.json")["version"] == pyproject["project"]["version"]
+    # Read the version with a pattern: tomllib only exists from Python 3.11, and 3.10 is supported.
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'^version = "([^"]+)"', text, flags=re.MULTILINE)
+    assert match, "pyproject.toml has no version"
+    assert load("plugin.json")["version"] == match.group(1)
 
 
 def test_marketplace_lists_the_plugin_with_the_same_name():

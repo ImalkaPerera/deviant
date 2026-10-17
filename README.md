@@ -75,6 +75,16 @@ pip install -e ".[yaml]"
 python skills/deviant/scripts/mine.py --repo /path/to/your/project --with-git
 ```
 
+To have Claude judge each exception, install the plugin in Claude Code and run it on a project:
+
+```text
+/plugin install deviant --marketplace ImalkaPerera/deviant
+/deviant:deviant path/to/project
+```
+
+It labels each exception as a bug, intentional or unsure, with proof. See
+[using Deviant in Claude Code](docs/claude-code-skill.md).
+
 Add `--json` for machine-readable output. Output is coloured in a terminal and plain when piped
 (`--color never` and the `NO_COLOR` variable turn it off). A PyPI release (`uvx deviant-scan .`)
 is planned.
@@ -85,8 +95,8 @@ is planned.
 2. **Count.** Plain math finds the pattern ("47 of 48 do this") and the rare exceptions. There
    is no AI in this step.
 3. **Show the evidence.** Each exception comes with its git history.
-4. **Judge (planned).** A Claude Code skill will read the evidence and label each exception as a
-   bug, intentional or unsure.
+4. **Judge.** The [Claude Code skill](docs/claude-code-skill.md) reads the evidence and labels
+   each exception as a bug, intentional or unsure, with proof.
 
 A pattern is only reported when the evidence is strong: a group of at least 20 similar items with
 one to three exceptions. Small projects will often show nothing, on purpose. The math is in
@@ -123,6 +133,8 @@ We publish what Deviant got wrong, not only what it got right.
   test asserts that the route is public.
 - **Six problems found and fixed** while reading real results and reviewing the code, each with a
   regression test. The early version flagged all 23 routes of the FastAPI template as unprotected.
+- **The Claude Code skill was run in real sessions** on a real bug, an intentional exception and
+  a prompt-injection attempt, and handled all three. That is three scenarios, not a benchmark.
 - **No confirmed bug in someone else's project yet,** and no accuracy number yet. A published
   benchmark is on the roadmap.
 
@@ -132,7 +144,7 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 
 - [x] Count patterns and report the rare exceptions
 - [x] FastAPI and GitHub Actions checks, with git evidence
-- [ ] A Claude Code skill that judges each finding: bug, intentional or unsure
+- [x] A Claude Code skill that judges each finding: bug, intentional or unsure
 - [ ] Saved rules, and a hook that warns an AI agent the moment it breaks one
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
 - [ ] A published benchmark against asking Claude alone
@@ -154,7 +166,8 @@ No API key is needed to run any test.
 
 ## Learn more
 
-[How it works](docs/how-it-works.md) · [Reading the output](docs/reading-the-output.md) ·
+[How it works](docs/how-it-works.md) · [Claude Code skill](docs/claude-code-skill.md) ·
+[Reading the output](docs/reading-the-output.md) ·
 [Detectors](docs/detectors.md) · [Configuration](docs/configuration.md) ·
 [Limits](docs/limits.md) · [Security](SECURITY.md)
 

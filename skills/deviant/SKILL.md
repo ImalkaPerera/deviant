@@ -36,6 +36,10 @@ redirection (you already see stderr), and not through PowerShell. This exact for
 pre-approved, so the user is not asked for permission. If the script path or the target
 contains spaces, quote that path and accept that the user will be asked once.
 
+If the command is refused, do not try other ways of running it, and do not look for the
+script elsewhere. Tell the user that the scan needs their approval, show them the exact
+command, and wait.
+
 Read what it prints on stderr as well, and pass on anything that affects how far to trust the
 result:
 
