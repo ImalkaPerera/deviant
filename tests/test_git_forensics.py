@@ -159,6 +159,8 @@ def test_text_output_shows_git_evidence(repo):
     assert "last changed:" in text
     assert "bob@example.com" in text
     assert "intent words: public, webhook" in text
+    assert "same author wrote" in text
+    assert "followed the rule" not in text  # that wording read as if the author had a clean record
 
 
 def test_shallow_clone_marks_boundary_commits_as_truncated(repo, tmp_path: Path):

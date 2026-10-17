@@ -1,49 +1,60 @@
 # Deviant
 
-**Find the one route that forgot its auth check.**
+**Catch the one route that forgot its auth check.**
 
 [![CI](https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml/badge.svg)](https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Status](https://img.shields.io/badge/status-early%20development-orange)
 
-Deviant finds likely bugs by spotting code that breaks your own project's patterns.
-If 47 of your 48 API routes check the user's permission, the 48th is worth a look.
-Deviant finds it, shows you the numbers, and points to the file and line.
+Your API has 48 routes. 47 of them check that the user is allowed in. One doesn't,
+and nobody noticed.
+
+Deviant finds that one. It reads your code, learns what your project normally does,
+and points at the thing that breaks the pattern, with the numbers and the git history
+behind it. You write no rules, and finding it needs no AI, no API key and no network.
+
+```text
+$ python skills/deviant/scripts/mine.py --repo . --with-git
+python_routes.fastapi_routes:app/routes.has_auth  n=48 s=47 v=1 wlb95=0.891
+  exception: app/routes/items.py:244 (POST /api/v1/users/export)
+    last changed: 52c027b 2026-10-17 by dana@example.com
+    commit: add csv export
+    same author wrote 47 of the 47 compliant items checked
+```
+
+In plain words: 47 of 48 routes check auth. This one, added in the commit "add csv export",
+doesn't. The same person, Dana, wrote all 47 routes that do check auth, so Dana knew the
+convention and this looks like a slip, not a choice. It is worth a look.
+
+## Why you might want this
+
+- **AI coding agents break unwritten rules.** They write code that looks right and
+  passes tests, but forgets the check every other route has.
+- **Code review catches what the reviewer remembers.** Deviant counts instead.
+- **It gives the same answer every time.** It runs on your machine, reads your files and
+  never runs your code.
+
+## What it checks today
+
+- **FastAPI routes:** auth, rate limits, response models. It follows auth through routers,
+  shared dependencies and `include_router`, so it does not cry wolf on routes that are
+  protected from above.
+- **GitHub Actions:** actions pinned to a commit (in workflows and composite actions),
+  job timeouts, token permissions and duplicate-run protection.
+
+More checks are one Python file each, so adding one is a good first contribution.
+See [Contributing](#contributing).
 
 > [!NOTE]
-> Deviant is in early development. The scanner, two detectors and git evidence work today.
-> The Claude Code skill, saved rules and edit hooks are planned.
-> See [Roadmap](#roadmap). There is no PyPI release yet.
+> Early development. The scanner, both checks and git evidence work today. Coming next:
+> a Claude Code skill that judges each finding, saved rules, and a hook that warns an AI
+> agent the moment it breaks a rule. Not on PyPI yet, so install from source
+> ([Quick start](#quick-start)).
 
----
-
-## Contents
-
-- [Why](#why)
-- [How it works](#how-it-works)
-- [Quick start](#quick-start)
-- [Example](#example)
-- [Detectors](#detectors)
-- [Why small projects show nothing](#why-small-projects-show-nothing)
-- [Configuration](#configuration)
-- [Limits](#limits)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [Credits and related work](#credits-and-related-work)
-- [License](#license)
-
----
-
-## Why
-
-Every project has unwritten rules: every route that changes data checks auth, every
-CI job has a timeout, every third-party action is pinned to a commit. Nobody writes these
-rules down, so nobody checks them. Code written by people in a hurry, or by AI agents,
-can look right and still break them.
-
-Deviant does not ask you to write the rules. It counts what your code already does and
-reports the rare items that do something different.
+[How it works](#how-it-works) · [Quick start](#quick-start) · [Example](#example) ·
+[Detectors](#detectors) · [Limits](#limits) · [Roadmap](#roadmap) ·
+[Contributing](#contributing)
 
 The idea comes from Engler et al., *Bugs as Deviant Behavior* (2001), which showed that
 rare exceptions to a common pattern often point to real bugs.
@@ -60,6 +71,9 @@ rare exceptions to a common pattern often point to real bugs.
 | 6. Enforce | Approved rules become permanent checks. | 🚧 Planned |
 | 7. Guard | A Claude Code hook checks each AI edit and warns when a rule is broken. | 🚧 Planned |
 
+<details>
+<summary><strong>How strong must the evidence be?</strong></summary>
+
 A pattern is only reported when the evidence is strong. All of these must hold:
 
 - the group has at least **20** items (`--min-items`),
@@ -69,6 +83,8 @@ A pattern is only reported when the evidence is strong. All of these must hold:
 
 The Wilson bound asks: "How sure can we be that this really is the norm, given how
 few items we have?" 47 of 48 gives 0.891 and is reported. 19 of 20 gives 0.764 and is not.
+
+</details>
 
 ## Quick start
 
@@ -110,15 +126,17 @@ $ python skills/deviant/scripts/mine.py --repo . --with-git
 python_routes.fastapi_routes:app/routes.has_auth  n=48 s=47 v=1 wlb95=0.891
   In fastapi_routes:app/routes, has_auth is true
   exception: app/routes/items.py:244 (POST /api/v1/users/export)
-    last changed: 6c322ab 2026-10-17 by sam@example.com
+    last changed: 52c027b 2026-10-17 by dana@example.com
     commit: add csv export
-    same author followed the rule in 0 of 47 checked compliant items
+    same author wrote 47 of the 47 compliant items checked
 ```
 
 `n` is the number of similar items, `s` how many follow the pattern, `v` how many do not,
 and `wlb95` the Wilson lower bound. Routes are compared within their folder, so the rule
-name includes it. The git lines are evidence, not a verdict. Here the author has never
-followed the rule, and nothing in the commit says the route is meant to be public.
+name includes it. The git lines are evidence, not a verdict. Dana wrote all 47 protected routes and then
+added this one without the check, and nothing in the commit message says it is meant to
+be public. If instead the author had written none of the protected routes, the count would
+be 0 and would say nothing about whether they knew the convention.
 
 With `--json`, each exception carries the same evidence for tools and the judge step:
 
@@ -131,9 +149,9 @@ With `--json`, each exception carries the same evidence for tools and the judge 
     "file": "app/routes/items.py",
     "line": 244,
     "git": {
-      "commit": "6c322ab", "author": "sam@example.com", "date": "2026-10-17",
+      "commit": "52c027b", "author": "dana@example.com", "date": "2026-10-17",
       "subject": "add csv export", "files_in_commit": 1,
-      "author_followed_rule_elsewhere": 0, "compliant_checked": 47,
+      "author_followed_rule_elsewhere": 47, "compliant_checked": 47,
       "intent_words": [], "history_truncated": false, "uncommitted": false
     }
   }]
@@ -142,7 +160,8 @@ With `--json`, each exception carries the same evidence for tools and the judge 
 
 `intent_words` lists hints such as `public`, `health`, `webhook`, `login`, `metrics`,
 `noqa`, `intentional` and `todo` found in the commit message or the comments just above
-the line. `compliant_checked` is a sample of at most 50 compliant items, to keep scans fast.
+the line. `compliant_checked` is a sample of at most 50 compliant items, to keep scans fast, and
+`author_followed_rule_elsewhere` is how many of those the same author wrote.
 
 An exception is a lead, not a verdict. A login or health-check route is supposed to be
 public. Deciding which exceptions are real bugs is the job of the planned judge step,

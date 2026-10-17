@@ -288,8 +288,8 @@ def _format_text(rules):
                     lines.append(f"    last changed: {git['commit']} {git['date']}{who}")
                 lines.append(f"    commit: {git['subject']}")
                 lines.append(
-                    f"    same author followed the rule in {git['author_followed_rule_elsewhere']}"
-                    f" of {git['compliant_checked']} checked compliant items"
+                    f"    same author wrote {git['author_followed_rule_elsewhere']}"
+                    f" of the {git['compliant_checked']} compliant items checked"
                 )
                 if git["history_truncated"]:
                     lines.append("    history truncated: shallow clone, so the author may be wrong")
