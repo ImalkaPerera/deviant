@@ -65,8 +65,3 @@ If the workflow fails before publishing, fix the problem, delete the tag
 (`git push --delete origin v0.1.0` and `git tag -d v0.1.0`) and tag again. A version that
 reached PyPI can never be uploaded again, even if you delete it there, so bump the version
 instead.
-
-## After the first release
-
-Tick "A PyPI release" in the README roadmap, and replace the "install from source" instructions
-in the README with `pip install deviant-scan` and `uvx deviant-scan`.

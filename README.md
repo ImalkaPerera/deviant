@@ -15,6 +15,7 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/deviant-scan/"><img src="https://img.shields.io/pypi/v/deviant-scan" alt="PyPI version"></a>
   <a href="https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml"><img src="https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.10%20to%203.14-blue" alt="Python 3.10 to 3.14">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
@@ -65,15 +66,14 @@ person wrote all 47 routes that do check auth, so this looks like a slip, not a 
 
 ## Quick start
 
-Deviant is early, so install from source. You need Python 3.10 or newer and git.
+You need Python 3.10 or newer and git.
 
 ```bash
-git clone https://github.com/ImalkaPerera/deviant.git
-cd deviant
-pip install -e .
-
-python skills/deviant/scripts/mine.py --repo /path/to/your/project --with-git
+pip install deviant-scan
+deviant-scan path/to/your/project --with-git
 ```
+
+To run it once without installing anything, use `uvx deviant-scan path/to/your/project --with-git`.
 
 To have Claude judge each exception, install the plugin in Claude Code and run it on a project:
 
@@ -86,8 +86,8 @@ It labels each exception as a bug, intentional or unsure, with proof. See
 [using Deviant in Claude Code](docs/claude-code-skill.md).
 
 Add `--json` for machine-readable output. Output is coloured in a terminal and plain when piped
-(`--color never` and the `NO_COLOR` variable turn it off). A PyPI release (`uvx deviant-scan .`)
-is planned.
+(`--color never` and the `NO_COLOR` variable turn it off). To work on Deviant itself, see the
+[contributor guide](CONTRIBUTING.md).
 
 ## How it works
 
@@ -148,7 +148,7 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 - [ ] Saved rules, and a hook that warns an AI agent the moment it breaks one
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
 - [ ] A published benchmark against asking Claude alone
-- [ ] A PyPI release
+- [x] A PyPI release
 
 ## Contribute
 
