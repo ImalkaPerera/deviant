@@ -1,6 +1,7 @@
 """Group detector output, find rules, filter them, and rank them.
 
-Does the math only. Detectors extract facts; git evidence is added later.
+Does the math only. Detectors extract facts; git_forensics adds the history of each
+exception when --with-git is used.
 """
 
 import argparse
@@ -143,7 +144,7 @@ def mine(
             if current is None or _sort_key(rule) < _sort_key(current):
                 best_by_exceptions[key] = rule
     rules = sorted(best_by_exceptions.values(), key=_sort_key)
-    evidence = GitEvidence(Path(repo_root)) if repo_root is not None else None
+    evidence = GitEvidence(Path(repo_root)) if repo_root is not None and rules else None
     for rule in rules:
         for exception in rule["exceptions"]:
             if evidence is not None:
@@ -240,6 +241,11 @@ def main(argv=None):
         "--with-git", action="store_true", help="add the git history of each exception"
     )
     args = parser.parse_args(argv)
+    # Commit subjects and author names can hold any character. A Windows console that
+    # cannot print them must not crash the scan, so replace what it cannot show.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     return run(
         args.repo,
         DETECTORS_DIR,

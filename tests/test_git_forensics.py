@@ -183,3 +183,33 @@ def test_evenly_spaced_sample_spreads_across_the_list():
     assert len(sample) == 50
     assert sample[0] == 0 and sample[-1] >= 980
     assert gf._evenly_spaced(items[:10], 50) == items[:10]
+
+
+def test_a_git_directory_is_not_a_work_tree(repo):
+    assert gf.GitEvidence(repo / ".git").available is False
+    assert gf.GitEvidence(repo).available is True
+
+
+def test_git_calls_disable_fsmonitor_so_a_hostile_repo_config_cannot_run_programs(
+    repo, monkeypatch
+):
+    seen = []
+    real_run = subprocess.run
+
+    def spy(command, **kwargs):
+        seen.append(command)
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(gf.subprocess, "run", spy)
+    gf.GitEvidence(repo).exception_evidence("app/routes.py", 5, [])
+    assert seen
+    assert all(command[1:3] == ["-c", "core.fsmonitor=false"] for command in seen)
+
+
+def test_no_git_calls_are_made_when_there_are_no_rules(repo, monkeypatch):
+    from mine import mine
+
+    calls = []
+    monkeypatch.setattr(gf, "_git", lambda *a, **k: calls.append(a) or None)
+    assert mine([], repo_root=repo) == []
+    assert calls == []

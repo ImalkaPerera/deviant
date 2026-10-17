@@ -179,3 +179,32 @@ def test_run_rejects_a_missing_repo(tmp_path: Path, capsys):
     code = run(tmp_path / "nope", tmp_path, min_items=20, min_confidence=0.80, as_json=True)
     assert code == 2
     assert "is not a directory" in capsys.readouterr().err
+
+
+def test_non_ascii_text_does_not_crash_a_console_that_cannot_print_it(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    root = tmp_path / "repo"
+    routes = root / "app"
+    routes.mkdir(parents=True)
+    for i in range(40):
+        body = "def h(user=Depends(get_current_user)):" if i != 7 else "def h():"
+        (routes / f"r{i}.py").write_text(
+            "from fastapi import APIRouter, Depends\nfrom app.auth import get_current_user\n"
+            f"router = APIRouter()\n\n\n@router.post('/r{i}')\n{body}\n    return {{}}\n"
+        )
+    env = dict(os.environ, GIT_AUTHOR_NAME="Zoe", GIT_AUTHOR_EMAIL="z@x")
+    env.update(GIT_COMMITTER_NAME="Zoe", GIT_COMMITTER_EMAIL="z@x", PYTHONIOENCODING="cp1252")
+    for args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "fix \u2192 caf\u00e9"]):
+        subprocess.run(["git", "-C", str(root), *args], check=True, env=env, capture_output=True)
+    script = Path(__file__).resolve().parent.parent / "skills/deviant/scripts/mine.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--repo", str(root), "--with-git"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "exception:" in result.stdout

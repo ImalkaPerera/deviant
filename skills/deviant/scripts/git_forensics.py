@@ -33,7 +33,9 @@ def _git(repo: str, args: list[str]) -> str | None:
     """Run git in repo and return stdout, or None if it failed for any reason."""
     try:
         result = subprocess.run(
-            ["git", "-C", repo, *args],
+            # The scanned repository is untrusted input. A crafted .git/config can name a
+            # program for git to run (core.fsmonitor), so switch that off for every call.
+            ["git", "-c", "core.fsmonitor=false", "-C", repo, *args],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -51,7 +53,9 @@ class GitEvidence:
 
     def __init__(self, repo_root: Path):
         self.repo = str(Path(repo_root).resolve())
-        self.available = _git(self.repo, ["rev-parse", "--is-inside-work-tree"]) is not None
+        # Inside a .git folder git prints "false" and still exits 0, so read the answer.
+        inside = _git(self.repo, ["rev-parse", "--is-inside-work-tree"])
+        self.available = inside is not None and inside.strip() == "true"
         self._boundary = _shallow_boundary(self.repo) if self.available else set()
         self._blame: dict[str, dict[int, dict]] = {}
         self._commits: dict[str, dict] = {}
