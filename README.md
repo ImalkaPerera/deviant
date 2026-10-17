@@ -161,20 +161,29 @@ nothing.
 
 | Feature | True when |
 |---|---|
-| `is_mutating` | The route uses POST, PUT, PATCH or DELETE |
+| `is_mutating` | The route uses POST, PUT, PATCH or DELETE. A route whose methods are given by a variable is reported as `ANY` and is not counted as mutating |
 | `has_auth` | An auth dependency applies to the route |
 | `has_response_model` | The route sets `response_model` |
 | `has_rate_limit` | A rate-limit dependency or decorator applies |
 
 Auth often comes from above the route, so the detector follows every level FastAPI uses:
 
-- route parameters: `user = Depends(get_current_user)`, `Security(...)`
-- `Annotated` aliases, including ones imported from other files:
+- route parameters: `user = Depends(get_current_user)`, `Security(...)`, also written
+  `Depends(dependency=...)` or imported under another name (`Depends as D`)
+- `Annotated` aliases, including ones imported from other files, re-exported through a
+  package, written as a string, or declared with a Python 3.12 `type` statement:
   `CurrentUser = Annotated[User, Depends(get_current_user)]`
-- the route decorator: `@router.post(..., dependencies=[Depends(...)])`
-- the router: `APIRouter(dependencies=[...])`
+- dependency lists and single dependencies kept in variables: `AUTH = [Depends(...)]`
+- the route decorator: `@router.post(..., dependencies=[Depends(...)])`, and routes added
+  with `@router.api_route(...)` or `router.add_api_route(...)`
+- the router: `APIRouter(dependencies=[...])`, including subclasses of `APIRouter`
 - every `include_router(..., dependencies=[...])` call, through nested routers
-- the app: `FastAPI(dependencies=[...])`, including apps built in factory functions
+- the app: `FastAPI(dependencies=[...])`
+
+Routers can be created inside functions: each function has its own scope, so two factory
+functions that both name their router `router` do not mix. A router included in more than
+one place gets the dependencies of all of them, so a gap in only one inclusion is not
+reported.
 
 A dependency counts as auth when its name contains words such as `auth`, `token`,
 `verify`, `permission`, `admin`, `oauth2`, `jwt`, `bearer` or `current_user`. Whole words
@@ -183,7 +192,8 @@ are matched, so `get_authors` is not auth. You can add your own words; see
 
 ### GitHub Actions (`github_actions`)
 
-Reads workflows in `.github/workflows/` with `yaml.safe_load`.
+Reads workflows in `.github/workflows/` and composite actions (`action.yml` files under
+`.github/actions/` and at the repository root) with `yaml.safe_load`.
 
 | Group | Feature | Why it matters |
 |---|---|---|
@@ -193,7 +203,9 @@ Reads workflows in `.github/workflows/` with `yaml.safe_load`.
 | Workflows | `has_permissions_block` | Least-privilege tokens |
 
 Workflow-level `concurrency` counts for every job. A workflow whose jobs all set their
-own `permissions` counts as having a permissions block. Local actions and workflows (`./...`) are skipped.
+own `permissions` counts as having a permissions block. Local actions and workflows
+(`./...`) are skipped, and so are references built from expressions
+(`actions/checkout@${{ inputs.ref }}`), which are only known when the workflow runs.
 
 ## Why small projects show nothing
 
@@ -225,11 +237,13 @@ Optional. Create `.deviant/config.json` in the scanned project:
 - **Needs enough similar items.** See the table above.
 - **Finds only what a detector looks for.** Today that is FastAPI routes and GitHub
   Actions workflows.
-- **Reads code, does not run it.** Only decorator routes such as `@router.post(...)` are
-  seen. Routes added with `add_api_route` or built dynamically are not.
-- **Parses with the Python it runs on.** Files using newer syntax, such as Python 3.14's
-  unparenthesised `except A, B:`, cannot be read by an older interpreter. Deviant warns
-  when it skips a file. Run it with the same or a newer Python than your project.
+- **Reads code, does not run it.** Routes are found from decorators and `add_api_route`
+  calls. A router passed in as a function parameter, routes registered in a loop, and
+  `include_router(get_router())` where the router comes from a call are not followed.
+- **Parses with the Python it runs on.** Python 3.14's unparenthesised `except A, B:` is
+  read on older versions too, but other new syntax cannot be. A file that cannot be parsed
+  is reported on stderr, because it may hide auth helpers that other files import. Run
+  Deviant with the same or a newer Python than your project.
 - **Git evidence needs real history.** In a shallow clone git blames old lines on the oldest
   commit it fetched, so the author is wrong. Deviant marks that evidence as truncated.
   Use a full clone.
