@@ -102,12 +102,12 @@ SKIP_DIRS = {
 def extract(repo_root: str) -> list[dict]:
     root = Path(repo_root).resolve()
     extra_auth = _extra_auth_words(root)
-    trees = _parse_files(root)
+    trees, sources = _parse_files(root)
     found = {rel: _collect(tree) for rel, tree in trees.items()}
     symbols = _Symbols(trees, found)
     items = []
     for rel, info in found.items():
-        items.extend(_routes_in_file(rel, info, symbols, extra_auth))
+        items.extend(_routes_in_file(rel, info, symbols, extra_auth, sources[rel]))
     return items
 
 
@@ -124,8 +124,10 @@ def _extra_auth_words(root: Path) -> set[str]:
 # --- reading files ------------------------------------------------------------------------
 
 
-def _parse_files(root: Path) -> dict[str, ast.Module]:
+def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]]]:
+    """(syntax trees, source lines) of every readable Python file, keyed by relative path."""
     trees = {}
+    sources = {}
     failed = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
@@ -143,6 +145,7 @@ def _parse_files(root: Path) -> dict[str, ast.Module]:
             tree = _parse(source, rel)
             if tree is not None:
                 trees[rel] = tree
+                sources[rel] = source.decode("utf-8", errors="replace").splitlines()
             elif not _looks_like_template(source):
                 failed.append(rel)
     if failed:
@@ -155,7 +158,7 @@ def _parse_files(root: Path) -> dict[str, ast.Module]:
             "results that depend on them can be wrong.",
             file=sys.stderr,
         )
-    return trees
+    return trees, sources
 
 
 # Python 3.14 allows `except A, B:` without parentheses. Older versions reject it, so a
@@ -525,7 +528,7 @@ def _is_name(node) -> bool:
 # --- routes -------------------------------------------------------------------------------
 
 
-def _routes_in_file(rel, info, symbols, extra_auth):
+def _routes_in_file(rel, info, symbols, extra_auth, lines):
     items = []
     for scope, node in info.functions:
         for dec in node.decorator_list:
@@ -553,7 +556,7 @@ def _routes_in_file(rel, info, symbols, extra_auth):
                 items.append(
                     _item(
                         rel, method, path, node.lineno, names, types, dec, rate_decorator,
-                        context, extra_auth,
+                        context, extra_auth, node, lines,
                     )
                 )  # fmt: skip
     for scope, call in info.api_route_calls:
@@ -576,19 +579,33 @@ def _routes_in_file(rel, info, symbols, extra_auth):
         for method in _methods(_keyword(call, "methods"), default=["GET"]):
             items.append(
                 _item(
-                    rel, method, path, call.lineno, names, types, call, False, context, extra_auth
-                )
+                    rel,
+                    method,
+                    path,
+                    call.lineno,
+                    names,
+                    types,
+                    call,
+                    False,
+                    context,
+                    extra_auth,
+                    function,
+                    lines,
+                )  # fmt: skip
             )
     return items
 
 
-def _item(rel, method, path, line, names, types, call, rate_decorator, context, extra_auth):
+def _item(
+    rel, method, path, line, names, types, call, rate_decorator, context, extra_auth,
+    function=None, lines=(),
+):  # fmt: skip
     features = {
         "is_mutating": method in MUTATING,
         "has_auth": any(_is_auth(n, extra_auth) for n in names)
-        or any(_matches_auth_type(t) for t in types),
-        "has_response_model": isinstance(call, ast.Call)
-        and any(kw.arg == "response_model" for kw in call.keywords),
+        or any(_matches_auth_type(t) for t in types)
+        or _auth_outside_dependencies(function, path, lines),
+        "has_response_model": _has_response_model(call, function),
         "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),
     }
     return {
@@ -602,6 +619,152 @@ def _item(rel, method, path, line, names, types, call, rate_decorator, context, 
         "features": features,
         "context": dict(context),
     }
+
+
+# --- routes that handle auth themselves, or need none -------------------------------------
+
+# Last path segments of routes that cannot require a session: they create it, report on the
+# service, or serve its own docs.
+_PUBLIC_SEGMENTS = {
+    "login", "logout", "register", "signup", "sign_in", "signin", "sign_up", "signout",
+    "sign_out", "session", "token", "refresh", "callback", "health", "healthz", "ping",
+    "docs", "redoc", "openapi.json",
+}  # fmt: skip
+_CALL_PREFIXES = {"require", "verify", "authenticate", "authorize", "authorise"}
+_CREDENTIAL_PARAMS = {
+    "secret", "signature", "token", "api_key", "apikey", "authorization", "hmac", "auth",
+    "password",
+}  # fmt: skip
+_CREDENTIAL_SOURCES = {"Header", "Query", "Cookie"}
+# Words after get_current_ that mean the dependency is not about who is calling.
+_NOT_AUTH_WORDS = {
+    "time", "date", "datetime", "settings", "config", "version", "page", "db", "session",
+    "locale", "language", "timestamp", "env", "logger", "request",
+}  # fmt: skip
+# A comment or docstring in which the author says the route is open on purpose.
+_SAYS_PUBLIC = re.compile(
+    r"\bno[ -]auth(?:entication|orization|orisation|n|z)?\b"
+    r"|\bwithout (?:any )?auth"
+    r"|\bintentionally\s+(?:un|non[- ]?)?(?:authenticated|public)\b"
+    r"|\banonymous (?:access|users?|callers?|requests?)\b"
+    r"|\bopen to (?:everyone|all|anyone)\b"
+    r"|\bpublic (?:endpoint|route|api|access)\b"
+    r"|无需(?:认证|登录|鉴权)|不需要(?:认证|登录|鉴权)",
+    re.IGNORECASE,
+)
+COMMENT_LOOKBACK = 3
+
+
+def _has_response_model(call, function) -> bool:
+    """A response model, or something that makes one unnecessary or impossible."""
+    returns = function.returns if function is not None else None
+    if returns is not None and not (isinstance(returns, ast.Constant) and returns.value is None):
+        return True
+    if not isinstance(call, ast.Call):
+        return False
+    for kw in call.keywords:
+        if kw.arg in ("response_model", "response_class"):
+            return True
+        if kw.arg == "include_in_schema" and _is_false(kw.value):
+            return True
+        if kw.arg == "status_code" and _is_204(kw.value):
+            return True
+    return False
+
+
+def _is_false(node) -> bool:
+    return isinstance(node, ast.Constant) and node.value is False
+
+
+def _is_204(node) -> bool:
+    if isinstance(node, ast.Constant):
+        return node.value == 204
+    return "204" in (_dotted(node) or "")
+
+
+def _auth_outside_dependencies(function, path, lines) -> bool:
+    """Auth that is written in the route, announced by its docs, or unneeded by its path."""
+    if _public_path(path):
+        return True
+    if function is None:
+        return False
+    return (
+        _declared_public(function, lines)
+        or _credential_params(function)
+        or _body_does_auth(function)
+    )
+
+
+def _public_path(path: str) -> bool:
+    segments = [s for s in path.lower().split("/") if s and not s.startswith("{")]
+    return bool(segments) and segments[-1].replace("-", "_") in _PUBLIC_SEGMENTS
+
+
+def _declared_public(function, lines) -> bool:
+    if _SAYS_PUBLIC.search(ast.get_docstring(function) or ""):
+        return True
+    first = min([function.lineno] + [d.lineno for d in function.decorator_list])
+    above = first - 2  # zero-based index of the line above the first decorator
+    for index in range(above, max(above - COMMENT_LOOKBACK, -1), -1):
+        if index >= len(lines) or not lines[index].lstrip().startswith("#"):
+            break
+        if _SAYS_PUBLIC.search(lines[index]):
+            return True
+    return False
+
+
+def _credential_params(function) -> bool:
+    """A secret, key, signature or token taken from a header, cookie or query parameter."""
+    positional = function.args.posonlyargs + function.args.args
+    defaults = [None] * (len(positional) - len(function.args.defaults)) + list(
+        function.args.defaults
+    )
+    pairs = list(zip(positional, defaults, strict=True))
+    pairs += zip(function.args.kwonlyargs, function.args.kw_defaults, strict=True)
+    for arg, default in pairs:
+        sources = [default] if default is not None else []
+        if arg.annotation is not None:
+            sources.append(_annotation(arg.annotation))
+        for source in sources:
+            for node in ast.walk(source):
+                if isinstance(node, ast.Call) and _last_name(node.func) in _CREDENTIAL_SOURCES:
+                    labels = [arg.arg] + [
+                        k.value.value
+                        for k in node.keywords
+                        if k.arg == "alias"
+                        and isinstance(k.value, ast.Constant)
+                        and isinstance(k.value.value, str)
+                    ]
+                    if any(_matches(label, _CREDENTIAL_PARAMS) for label in labels):
+                        return True
+    return False
+
+
+def _body_does_auth(function) -> bool:
+    """The route checks credentials itself: raises 401/403, calls a verifier, compares a secret."""
+    for node in ast.walk(function):
+        if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+            if _last_name(node.exc.func) == "HTTPException" and _denies(node.exc):
+                return True
+        elif isinstance(node, ast.Call):
+            name = _dotted(node.func) or ""
+            last = name.split(".")[-1]
+            if last == "compare_digest" or name.endswith("jwt.decode"):
+                return True
+            if _normalise(last).split("_")[0] in _CALL_PREFIXES:
+                return True
+    return False
+
+
+def _denies(call) -> bool:
+    """True for HTTPException with a 401 or 403 status."""
+    status = call.args[0] if call.args else _keyword(call, "status_code")
+    if status is None:
+        return False
+    if isinstance(status, ast.Constant):
+        return status.value in (401, 403)
+    text = _dotted(status) or ""
+    return any(word in text for word in ("401", "403", "UNAUTHORIZED", "FORBIDDEN"))
 
 
 def _function_dependencies(node, rel, symbols):
@@ -751,6 +914,9 @@ def _is_auth(name: str, extra_auth: set[str]) -> bool:
     if _matches(name, AUTH_WORDS | extra_auth):
         return True
     words = set(_normalise(name).split("_"))
+    # get_current_context, get_current_tenant: whoever is calling, unless plainly not that
+    if _normalise(name.split(".")[-1]).startswith("get_current_") and not words & _NOT_AUTH_WORDS:
+        return True
     return any(set(pair) <= words for pair in AUTH_WORD_PAIRS)
 
 

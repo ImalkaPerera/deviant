@@ -11,6 +11,6 @@ def send_feedback(db=Depends(get_db)):
     return {}
 
 
-@router.get("/health")
+@router.get("/stats")
 def health():
     return {"ok": True}

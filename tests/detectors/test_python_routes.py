@@ -53,7 +53,7 @@ def test_non_auth_dependencies_do_not_count_as_auth():
     feedback = features_for("non_auth", "POST /feedback")
     assert not feedback["has_auth"]
     assert feedback["has_rate_limit"]
-    health = features_for("non_auth", "GET /health")
+    health = features_for("non_auth", "GET /stats")
     assert not health["has_auth"] and not health["has_rate_limit"]
 
 
