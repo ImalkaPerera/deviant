@@ -441,6 +441,8 @@ class _Symbols:
     def depends_names(self, expr, rel, seen=None) -> list[str]:
         """Names of callables used in Depends(...) or Security(...) anywhere in expr.
 
+        Calls to a factory named like `...Dependency` count too.
+
         A variable that holds dependencies, such as AUTH = [Depends(get_user)], is followed.
         """
         seen = set() if seen is None else seen
@@ -457,6 +459,13 @@ class _Symbols:
                 name = _dotted(target) if target is not None else None
                 if name:
                     names.append(name)
+            elif isinstance(node, ast.Call) and _normalise(_last_name(node.func)).endswith(
+                "_dependency"
+            ):
+                # A factory whose name says it builds a dependency, as in
+                # dependencies=[UserInterfaceAuthDependency("job:edit")] or
+                # Annotated[User, CurrentUserDependency()].
+                names.append(_dotted(node.func))
             elif isinstance(node, (ast.Name, ast.Attribute)):
                 key = self.find(node, rel, (), self.consts)
                 if key is not None and key not in seen:

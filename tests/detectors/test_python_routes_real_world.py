@@ -348,3 +348,23 @@ def test_a_route_that_calls_a_helper_which_checks_credentials_is_guarded(tmp_pat
         "has_auth",
     )
     assert result == {"POST /a": True, "POST /b": False}
+
+
+def test_a_dependency_factory_called_in_the_route_counts(tmp_path):
+    result = has(
+        tmp_path,
+        """
+        from typing import Annotated
+
+        @router.post("/a", dependencies=[UserInterfaceAuthDependency("job:edit")])
+        def a(): ...
+
+        @router.post("/b")
+        def b(user: Annotated[User, CurrentUserDependency()]): ...
+
+        @router.post("/c")
+        def c(db: Annotated[Session, DBSessionDependency()]): ...
+        """,
+        "has_auth",
+    )
+    assert result == {"POST /a": True, "POST /b": True, "POST /c": False}
