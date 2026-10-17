@@ -3,7 +3,7 @@ name: deviant
 description: Finds likely bugs where code breaks the project's own patterns, such as one API route missing the auth check that 47 others have, or one CI job with no timeout. Runs a deterministic scan, then judges each outlier as BUG, INTENTIONAL or UNSURE with proof from the code, tests and git history. Use when auditing a repo for missing checks, reviewing FastAPI routes or GitHub Actions workflows for consistency, or deciding whether a flagged exception is a real bug.
 argument-hint: "[path to scan, default .]"
 allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/mine.py *) Bash(python ${CLAUDE_SKILL_DIR}/scripts/mine.py *) Bash(py -3 ${CLAUDE_SKILL_DIR}/scripts/mine.py *) Read Grep Glob
-license: MIT
+license: MIT OR Apache-2.0
 compatibility: Requires Python 3.10+ and git. PyYAML is needed for the GitHub Actions check.
 ---
 

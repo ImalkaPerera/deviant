@@ -18,7 +18,7 @@
   <a href="https://pypi.org/project/deviant-scan/"><img src="https://img.shields.io/pypi/v/deviant-scan" alt="PyPI version"></a>
   <a href="https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml"><img src="https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.10%20to%203.14-blue" alt="Python 3.10 to 3.14">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg" alt="MIT or Apache-2.0 license"></a>
   <img src="https://img.shields.io/badge/status-early%20development-orange" alt="Early development">
 </p>
 
@@ -85,7 +85,7 @@ To have Claude judge each exception, install the plugin in Claude Code and run i
 It labels each exception as a bug, intentional or unsure, with proof. See
 [using Deviant in Claude Code](docs/claude-code-skill.md).
 
-Add `--json` for machine-readable output. Output is coloured in a terminal and plain when piped
+Add `--json` for machine-readable output. Output is colored in a terminal and plain when piped
 (`--color never` and the `NO_COLOR` variable turn it off). To work on Deviant itself, see the
 [contributor guide](CONTRIBUTING.md).
 
@@ -128,10 +128,10 @@ Deviant does not replace your linter or your reviewers. It finds what only count
 
 We publish what Deviant got wrong, not only what it got right.
 
-- **577 real projects scanned,** and every candidate read by hand.
+- **547 real projects scanned** (from 577 found on GitHub), and every candidate read by hand.
 - **One candidate at the default settings.** It turned out to be intentional: the project's own
   test asserts that the route is public.
-- **Six problems found and fixed** while reading real results and reviewing the code, each with a
+- **Eight problems found and fixed** while reading real results and reviewing the code, each with a
   regression test. The early version flagged all 23 routes of the FastAPI template as unprotected.
 - **The Claude Code skill was run in real sessions** on a real bug, an intentional exception and
   a prompt-injection attempt, and handled all three. That is three scenarios, not a benchmark.
@@ -177,4 +177,4 @@ Related work: [Laravel `infer-conventions`](https://laravel.com/blog/extracting-
 [codebase-dna-guardian](https://github.com/mturac/codebase-dna-guardian),
 [Trail of Bits `semgrep-rule-creator`](https://lobehub.com/skills/trailofbits-skills-semgrep-rule-creator).
 
-[MIT license](LICENSE)
+Licensed under either of the [MIT license](LICENSE) or the [Apache License 2.0](LICENSE-APACHE), at your option.

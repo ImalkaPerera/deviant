@@ -8,6 +8,6 @@
   },
   "homepage": "https://github.com/ImalkaPerera/deviant",
   "repository": "https://github.com/ImalkaPerera/deviant",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "keywords": ["static-analysis", "bug-detection", "code-quality", "fastapi", "github-actions", "code-review"]
 }

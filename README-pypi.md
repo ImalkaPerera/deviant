@@ -39,4 +39,4 @@ A plugin judges each exception as a bug, intentional or unsure, with proof:
 - [What it found and got wrong on real projects](https://github.com/ImalkaPerera/deviant/blob/main/docs/tested-on-real-projects.md)
 - [Contribute](https://github.com/ImalkaPerera/deviant/blob/main/CONTRIBUTING.md)
 
-MIT licence.
+Licensed under either the MIT license or the Apache License 2.0, at your option.

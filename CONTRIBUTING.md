@@ -133,6 +133,8 @@ so nobody duplicates it.
   `feat: add Dockerfile detector`, `fix: handle empty workflow files`, `docs: ...`.
 - If your change affects what Deviant reports, say what it did on a real project before
   and after.
+- Deviant is licensed under MIT or Apache-2.0, at your option. By contributing, you agree
+  that your contribution is licensed the same way.
 
 ## Security
 
