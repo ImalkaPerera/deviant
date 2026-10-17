@@ -5,6 +5,7 @@ If git is missing, the folder is not a repository, or a call times out, the evid
 is left out and the scan still works.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -31,8 +32,21 @@ _SHA = re.compile(r"^([0-9a-f]{40}) \d+ (\d+)")
 _warned_timeouts: set[str] = set()
 
 
+# Set by git itself for hooks and scripts. Inherited, they would point git at another repository.
+_REPOSITORY_ENV = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+)
+
+
 def _git(repo: str, args: list[str]) -> str | None:
     """Run git in repo and return stdout, or None if it failed for any reason."""
+    env = {k: v for k, v in os.environ.items() if k not in _REPOSITORY_ENV}
     try:
         result = subprocess.run(
             # The scanned repository is untrusted input. A crafted .git/config can name a
@@ -44,6 +58,7 @@ def _git(repo: str, args: list[str]) -> str | None:
             errors="replace",
             timeout=GIT_TIMEOUT_SECONDS,
             check=False,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         # Say so once per kind of command, so a slow disk does not bury the output.

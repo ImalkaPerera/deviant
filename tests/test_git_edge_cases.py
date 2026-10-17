@@ -257,3 +257,18 @@ def test_a_config_file_that_is_a_symlink_is_ignored(tmp_path):
     except OSError:
         pytest.skip("symlinks need extra rights on this system")
     assert pr._extra_auth_words(root) == set()
+
+
+def test_an_inherited_git_dir_does_not_redirect_evidence_to_another_repository(
+    tmp_path, monkeypatch
+):
+    scanned = make_repo(tmp_path, "scanned")
+    (scanned / "a.py").write_text("x = 1\ny = 2\n")
+    commit_all(scanned, "scanned work")
+    other = make_repo(tmp_path, "other")
+    (other / "a.py").write_text("x = 1\ny = 2\n")
+    git(other, "add", "-A")
+    git(other, "commit", "-q", "-m", "other work", author=("Bob", "bob@example.com"))
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    info = gf.GitEvidence(scanned).line_author("a.py", 1)
+    assert info is not None and info["email"] == ANN[1]
