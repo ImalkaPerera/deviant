@@ -3,7 +3,7 @@
 **Find the one route that forgot its auth check.**
 
 [![CI](https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml/badge.svg)](https://github.com/ImalkaPerera/deviant/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)
+![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Status](https://img.shields.io/badge/status-early%20development-orange)
 
@@ -12,8 +12,8 @@ If 47 of your 48 API routes check the user's permission, the 48th is worth a loo
 Deviant finds it, shows you the numbers, and points to the file and line.
 
 > [!NOTE]
-> Deviant is in early development. The scanner and two detectors work today.
-> The Claude Code skill, git evidence, saved rules and edit hooks are planned.
+> Deviant is in early development. The scanner, two detectors and git evidence work today.
+> The Claude Code skill, saved rules and edit hooks are planned.
 > See [Roadmap](#roadmap). There is no PyPI release yet.
 
 ---
@@ -54,10 +54,11 @@ rare exceptions to a common pattern often point to real bugs.
 |---|---|---|
 | 1. Group | Detectors list similar items, such as all FastAPI routes or all CI jobs. | ✅ Built |
 | 2. Count | Plain math finds patterns like "47 of 48 do X". Same input, same output. No AI. | ✅ Built |
-| 3. Judge | Claude checks each exception against git history, comments and tests, and labels it BUG, INTENTIONAL or UNSURE with proof. | 🚧 Planned |
-| 4. Approve | You choose which rules to keep. | 🚧 Planned |
-| 5. Enforce | Approved rules become permanent checks. | 🚧 Planned |
-| 6. Guard | A Claude Code hook checks each AI edit and warns when a rule is broken. | 🚧 Planned |
+| 3. Evidence | Each exception gets its git history: who last changed the line, when, why, and whether that author follows the rule elsewhere. | ✅ Built (`--with-git`) |
+| 4. Judge | Claude reads the evidence, comments and tests, and labels each exception BUG, INTENTIONAL or UNSURE with proof. | 🚧 Planned |
+| 5. Approve | You choose which rules to keep. | 🚧 Planned |
+| 6. Enforce | Approved rules become permanent checks. | 🚧 Planned |
+| 7. Guard | A Claude Code hook checks each AI edit and warns when a rule is broken. | 🚧 Planned |
 
 A pattern is only reported when the evidence is strong. All of these must hold:
 
@@ -93,37 +94,55 @@ python skills/deviant/scripts/mine.py --repo /path/to/your/project
 | `--min-items` | `20` | Smallest group that can produce a rule |
 | `--min-confidence` | `0.80` | Smallest Wilson lower bound that is reported |
 | `--json` | off | Print JSON for tools and for the judge step |
+| `--with-git` | off | Add the git history of each exception (needs a git repository) |
 
 The scan is fully local. It reads files and never runs your code or sends it anywhere.
+Git evidence runs read-only git commands, with `core.fsmonitor` switched off so a crafted
+`.git/config` in a downloaded folder cannot make git run a program.
 
 ## Example
 
 A FastAPI project with 48 routes that change data. 47 use `Depends(get_current_user)`,
-one does not:
+one does not. Dana wrote the 47. Sam added the last route:
 
 ```text
-$ python skills/deviant/scripts/mine.py --repo .
-python_routes.fastapi_routes.has_auth  n=48 s=47 v=1 wlb95=0.891
-  In fastapi_routes, has_auth is true
-  exception: app/routes/items.py:163 (POST /api/v1/users/export)
+$ python skills/deviant/scripts/mine.py --repo . --with-git
+python_routes.fastapi_routes:app/routes.has_auth  n=48 s=47 v=1 wlb95=0.891
+  In fastapi_routes:app/routes, has_auth is true
+  exception: app/routes/items.py:244 (POST /api/v1/users/export)
+    last changed: 6c322ab 2026-10-17 by sam@example.com
+    commit: add csv export
+    same author followed the rule in 0 of 47 checked compliant items
 ```
 
 `n` is the number of similar items, `s` how many follow the pattern, `v` how many do not,
-and `wlb95` the Wilson lower bound. With `--json`, each rule also lists the exceptions
-and a few compliant examples to compare against (trimmed):
+and `wlb95` the Wilson lower bound. Routes are compared within their folder, so the rule
+name includes it. The git lines are evidence, not a verdict. Here the author has never
+followed the rule, and nothing in the commit says the route is meant to be public.
+
+With `--json`, each exception carries the same evidence for tools and the judge step:
 
 ```json
 {
-  "rule_id": "python_routes.fastapi_routes.has_auth",
-  "kind": "plain",
-  "feature": "has_auth",
+  "rule_id": "python_routes.fastapi_routes:app/routes.has_auth",
   "n": 48, "s": 47, "v": 1, "wlb95": 0.891,
-  "exceptions": [
-    {"item_id": "POST /api/v1/users/export", "file": "app/routes/items.py", "line": 163}
-  ],
-  "compliant_examples": [{"file": "app/routes/items.py", "line": 8}]
+  "exceptions": [{
+    "item_id": "POST /api/v1/users/export",
+    "file": "app/routes/items.py",
+    "line": 244,
+    "git": {
+      "commit": "6c322ab", "author": "sam@example.com", "date": "2026-10-17",
+      "subject": "add csv export", "files_in_commit": 1,
+      "author_followed_rule_elsewhere": 0, "compliant_checked": 47,
+      "intent_words": [], "history_truncated": false, "uncommitted": false
+    }
+  }]
 }
 ```
+
+`intent_words` lists hints such as `public`, `health`, `webhook`, `login`, `metrics`,
+`noqa`, `intentional` and `todo` found in the commit message or the comments just above
+the line. `compliant_checked` is a sample of at most 50 compliant items, to keep scans fast.
 
 An exception is a lead, not a verdict. A login or health-check route is supposed to be
 public. Deciding which exceptions are real bugs is the job of the planned judge step,
@@ -168,13 +187,13 @@ Reads workflows in `.github/workflows/` with `yaml.safe_load`.
 
 | Group | Feature | Why it matters |
 |---|---|---|
-| Third-party actions and reusable workflows | `pinned_to_sha` | Supply-chain safety |
+| Third-party actions and reusable workflows | `pinned_to_sha` (a commit SHA or a Docker `sha256:` digest) | Supply-chain safety |
 | Jobs | `has_timeout_minutes` | Stops runaway jobs |
 | Jobs | `has_concurrency` | Avoids duplicate runs |
 | Workflows | `has_permissions_block` | Least-privilege tokens |
 
 Workflow-level `concurrency` counts for every job. A workflow whose jobs all set their
-own `permissions` counts as having a permissions block. Local actions (`./...`) are skipped.
+own `permissions` counts as having a permissions block. Local actions and workflows (`./...`) are skipped.
 
 ## Why small projects show nothing
 
@@ -211,6 +230,9 @@ Optional. Create `.deviant/config.json` in the scanned project:
 - **Parses with the Python it runs on.** Files using newer syntax, such as Python 3.14's
   unparenthesised `except A, B:`, cannot be read by an older interpreter. Deviant warns
   when it skips a file. Run it with the same or a newer Python than your project.
+- **Git evidence needs real history.** In a shallow clone git blames old lines on the oldest
+  commit it fetched, so the author is wrong. Deviant marks that evidence as truncated.
+  Use a full clone.
 - **Exceptions are leads, not verdicts.** Some exceptions are intentional.
 
 ## Roadmap
@@ -218,7 +240,7 @@ Optional. Create `.deviant/config.json` in the scanned project:
 - [x] Wilson filter, rule mining and ranking
 - [x] FastAPI routes detector
 - [x] GitHub Actions detector
-- [ ] Git evidence for each exception: who changed it, when, and why (`--with-git`)
+- [x] Git evidence for each exception: who changed it, when, and why (`--with-git`)
 - [ ] Claude Code skill that judges each exception as BUG, INTENTIONAL or UNSURE
 - [ ] Saved rules in `.deviant/rules.json` with exemptions
 - [ ] Claude Code hook that warns when an edit breaks an approved rule
