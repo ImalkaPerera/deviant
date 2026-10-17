@@ -10,6 +10,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from git_forensics import GitEvidence
 from stats import (
     DEFAULT_MIN_CONFIDENCE,
     DEFAULT_MIN_ITEMS,
@@ -80,6 +81,8 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
         "wlb95": round(wlb, 3),
         "exceptions": exceptions,
         "compliant_examples": examples,
+        # Every compliant location, for git evidence. Removed before output.
+        "_compliant": [(m["file"], m["line"]) for m in pool if _has(m, feature)],
     }
 
 
@@ -111,8 +114,16 @@ def _sort_key(rule):
     return (-rule["wlb95"], -rule["n"], rule["v"], rule["kind"] != "plain", rule["rule_id"])
 
 
-def mine(items, min_items=DEFAULT_MIN_ITEMS, min_confidence=DEFAULT_MIN_CONFIDENCE):
-    """Return reported rules, strongest first."""
+def mine(
+    items,
+    min_items=DEFAULT_MIN_ITEMS,
+    min_confidence=DEFAULT_MIN_CONFIDENCE,
+    repo_root=None,
+):
+    """Return reported rules, strongest first.
+
+    With repo_root, each exception also gets a "git" block from the history of its line.
+    """
     _validate(items)
     # Sort first so the output does not depend on the order detectors return items.
     items = sorted(items, key=lambda i: (i["file"], i["line"], i["item_id"]))
@@ -131,7 +142,16 @@ def mine(items, min_items=DEFAULT_MIN_ITEMS, min_confidence=DEFAULT_MIN_CONFIDEN
             current = best_by_exceptions.get(key)
             if current is None or _sort_key(rule) < _sort_key(current):
                 best_by_exceptions[key] = rule
-    return sorted(best_by_exceptions.values(), key=_sort_key)
+    rules = sorted(best_by_exceptions.values(), key=_sort_key)
+    evidence = GitEvidence(Path(repo_root)) if repo_root is not None else None
+    for rule in rules:
+        for exception in rule["exceptions"]:
+            if evidence is not None:
+                exception["git"] = evidence.exception_evidence(
+                    exception["file"], exception["line"], rule["_compliant"]
+                )
+        del rule["_compliant"]
+    return rules
 
 
 def load_detectors(detectors_dir: Path):
@@ -170,15 +190,33 @@ def _format_text(rules):
         lines.append(f"  {r['statement']}")
         for e in r["exceptions"]:
             lines.append(f"  exception: {e['file']}:{e['line']} ({e['item_id']})")
+            git = e.get("git")
+            if git:
+                where = "uncommitted" if git["uncommitted"] else f"{git['commit']} {git['date']}"
+                lines.append(f"    last changed: {where} by {git['author']}")
+                lines.append(f"    commit: {git['subject']}")
+                lines.append(
+                    f"    same author followed the rule in {git['author_followed_rule_elsewhere']}"
+                    f" of {git['compliant_checked']} checked compliant items"
+                )
+                if git["history_truncated"]:
+                    lines.append("    history truncated: shallow clone, so the author may be wrong")
+                if git["intent_words"]:
+                    lines.append(f"    intent words: {', '.join(git['intent_words'])}")
     return "\n".join(lines)
 
 
-def run(repo_root, detectors_dir, min_items, min_confidence, as_json):
+def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=False):
     if not Path(repo_root).is_dir():
         print(f"error: {repo_root} is not a directory", file=sys.stderr)
         return 2
     items = collect_items(Path(repo_root), Path(detectors_dir))
-    rules = mine(items, min_items=min_items, min_confidence=min_confidence)
+    rules = mine(
+        items,
+        min_items=min_items,
+        min_confidence=min_confidence,
+        repo_root=Path(repo_root) if with_git else None,
+    )
     if as_json:
         print(json.dumps({"version": 1, "rules": rules}, indent=2))
     elif not rules:
@@ -198,11 +236,18 @@ def main(argv=None):
     parser.add_argument("--min-items", type=int, default=DEFAULT_MIN_ITEMS)
     parser.add_argument("--min-confidence", type=float, default=DEFAULT_MIN_CONFIDENCE)
     parser.add_argument("--json", action="store_true", help="print JSON")
-    parser.add_argument("--with-git", action="store_true", help="add git evidence (Phase 3)")
+    parser.add_argument(
+        "--with-git", action="store_true", help="add the git history of each exception"
+    )
     args = parser.parse_args(argv)
-    if args.with_git:
-        print("warning: git evidence is not built yet; ignoring --with-git", file=sys.stderr)
-    return run(args.repo, DETECTORS_DIR, args.min_items, args.min_confidence, args.json)
+    return run(
+        args.repo,
+        DETECTORS_DIR,
+        args.min_items,
+        args.min_confidence,
+        args.json,
+        with_git=args.with_git,
+    )
 
 
 if __name__ == "__main__":
