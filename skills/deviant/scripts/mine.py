@@ -272,33 +272,95 @@ def parse_rule_id(rule_id: str) -> dict:
     }
 
 
-def _format_text(rules):
+class _Style:
+    """Wraps text in ANSI codes when colour is on, and returns it unchanged when it is off."""
+
+    def __init__(self, on):
+        self.on = on
+
+    def _wrap(self, code, text):
+        return f"\x1b[{code}m{text}\x1b[0m" if self.on else str(text)
+
+    def bold(self, text):
+        return self._wrap("1", text)
+
+    def dim(self, text):
+        return self._wrap("2", text)
+
+    def red(self, text):
+        return self._wrap("1;31", text)
+
+    def green(self, text):
+        return self._wrap("32", text)
+
+    def yellow(self, text):
+        return self._wrap("33", text)
+
+
+def should_color(mode, stream, environ=None):
+    """Whether to colour output: "always", "never", or "auto" (a terminal, and NO_COLOR unset)."""
+    env = os.environ if environ is None else environ
+    if mode == "always":
+        return True
+    if mode == "never":
+        return False
+    return bool(stream.isatty()) and "NO_COLOR" not in env and env.get("TERM") != "dumb"
+
+
+def _enable_windows_ansi():
+    """Turn on ANSI escape codes in a Windows console. False if it cannot be done."""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)
+        mode = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False
+        return bool(kernel32.SetConsoleMode(handle, mode.value | 0x0004))
+    except Exception:
+        return False
+
+
+def _format_text(rules, color=False):
+    c = _Style(color)
     lines = []
     for r in rules:
-        lines.append(f"{r['rule_id']}  n={r['n']} s={r['s']} v={r['v']} wlb95={r['wlb95']:.3f}")
+        lines.append(
+            f"{c.bold(r['rule_id'])}  {c.dim('n=')}{r['n']} {c.dim('s=')}{c.green(r['s'])} "
+            f"{c.dim('v=')}{c.yellow(r['v'])} {c.dim('wlb95=')}{r['wlb95']:.3f}"
+        )
         lines.append(f"  {r['statement']}")
         for e in r["exceptions"]:
-            lines.append(f"  exception: {e['file']}:{e['line']} ({e['item_id']})")
+            where = c.red(f"{e['file']}:{e['line']}")
+            lines.append(f"  {c.dim('exception:')} {where} ({e['item_id']})")
             git = e.get("git")
             if git:
                 if git["uncommitted"]:
-                    lines.append("    last changed: uncommitted changes")
+                    lines.append(f"    {c.dim('last changed:')} uncommitted changes")
                 else:
                     who = f" by {git['author']}" if git["author"] else ""
-                    lines.append(f"    last changed: {git['commit']} {git['date']}{who}")
-                lines.append(f"    commit: {git['subject']}")
+                    lines.append(f"    {c.dim('last changed:')} {git['commit']} {git['date']}{who}")
+                lines.append(f"    {c.dim('commit:')} {git['subject']}")
+                wrote = c.green(git["author_followed_rule_elsewhere"])
+                checked = git["compliant_checked"]
                 lines.append(
-                    f"    same author wrote {git['author_followed_rule_elsewhere']}"
-                    f" of the {git['compliant_checked']} compliant items checked"
+                    f"    {c.dim('same author wrote')} {wrote} {c.dim('of the')} {checked} "
+                    f"{c.dim('compliant items checked')}"
                 )
                 if git["history_truncated"]:
-                    lines.append("    history truncated: shallow clone, so the author may be wrong")
+                    lines.append(
+                        "    "
+                        + c.yellow("history truncated: shallow clone, so the author may be wrong")
+                    )
                 if git["intent_words"]:
-                    lines.append(f"    intent words: {', '.join(git['intent_words'])}")
+                    lines.append(f"    {c.dim('intent words:')} {', '.join(git['intent_words'])}")
     return "\n".join(lines)
 
 
-def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=False):
+def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=False, color=False):
     if not Path(repo_root).is_dir():
         print(f"error: {repo_root} is not a directory", file=sys.stderr)
         return 2
@@ -318,7 +380,7 @@ def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=F
             "at the default 0.80 confidence."
         )
     else:
-        print(_format_text(rules))
+        print(_format_text(rules, color=color))
     return 0
 
 
@@ -349,6 +411,12 @@ def main(argv=None):
     parser.add_argument("--min-confidence", type=_fraction, default=DEFAULT_MIN_CONFIDENCE)
     parser.add_argument("--json", action="store_true", help="print JSON")
     parser.add_argument(
+        "--color",
+        choices=["auto", "always", "never"],
+        default="auto",
+        help="colour the text output (default: auto, on for a terminal; NO_COLOR turns it off)",
+    )
+    parser.add_argument(
         "--with-git", action="store_true", help="add the git history of each exception"
     )
     args = parser.parse_args(argv)
@@ -357,6 +425,9 @@ def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
+    color = not args.json and should_color(args.color, sys.stdout)
+    if color and args.color == "auto" and not _enable_windows_ansi():
+        color = False
     try:
         return run(
             args.repo,
@@ -365,6 +436,7 @@ def main(argv=None):
             args.min_confidence,
             args.json,
             with_git=args.with_git,
+            color=color,
         )
     except BrokenPipeError:
         # The reader went away (for example `| head`). Point stdout at the null device so
