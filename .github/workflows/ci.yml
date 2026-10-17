@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   lint:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -21,6 +22,7 @@ jobs:
       - run: ruff format --check .
 
   test:
+    timeout-minutes: 20
     needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
@@ -37,6 +39,7 @@ jobs:
       - run: python -m pytest
 
   package:
+    timeout-minutes: 15
     needs: lint
     runs-on: ubuntu-latest
     steps:
