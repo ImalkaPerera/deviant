@@ -1,11 +1,16 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Deviant: catch the one route that forgot its auth check" width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+    <img src="docs/assets/logo-light.svg" alt="Deviant" height="76">
+  </picture>
 </p>
 
-<h3 align="center">Find the one thing in your code that breaks the pattern.</h3>
+<p align="center">
+  <b>Find the one thing in your code that breaks the pattern.</b>
+</p>
 
 <p align="center">
-  An open-source scanner that learns your project's own conventions, flags the exceptions,<br>
+  Deviant learns your project's own conventions, flags the exceptions,<br>
   and shows the git history you need to judge them.
 </p>
 
@@ -14,53 +19,49 @@
   <img src="https://img.shields.io/badge/python-3.10%20to%203.14-blue" alt="Python 3.10 to 3.14">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/status-early%20development-orange" alt="Early development">
-  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/contributions-welcome-brightgreen" alt="Contributions welcome"></a>
 </p>
 
 <p align="center">
-  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#what-it-checks">What it checks</a> ·
-  <a href="#honest-by-design">Proof</a> ·
+  <a href="docs/tested-on-real-projects.md">Tested on real projects</a> ·
   <a href="#contribute">Contribute</a>
 </p>
 
 ---
 
-## The problem
-
-> **47 of your 48 API routes check who is calling. The 48th doesn't, and it exports every user's data.
-> Nobody noticed.**
+47 of your 48 API routes check who is calling. The 48th doesn't, and it exports every user's
+data. Nobody noticed.
 
 Every codebase runs on unwritten rules: every route checks auth, every CI job has a timeout,
 every action is pinned to a commit. Nobody writes them down, so nobody checks them. Code review
 catches what the reviewer remembers. AI coding agents write code that looks right and passes
-tests, but quietly forgets the check every other route has.
+tests, but can quietly forget the check every other route has.
 
-**Deviant finds that route.** It counts what your code already does, picks out the rare item that
-breaks the pattern, and shows the git history behind it. You write no rules.
+Deviant counts what your code already does, picks out the rare item that breaks the pattern, and
+shows the git history behind it. You write no rules.
 
 <p align="center">
-  <img src="docs/assets/demo.svg" alt="Terminal output of a Deviant scan. Callout 1: 47 of 48 routes check auth. Callout 2: the one that doesn't, app/routes/items.py line 244. Callout 3: who changed it, when and why. The same author wrote all 47 routes that do check auth." width="100%">
+  <img src="docs/assets/demo.png" alt="Terminal output. The scan reports 48 routes, 47 of which follow the has_auth pattern. The exception is app/routes/items.py line 244, last changed by dana@example.com in the commit add csv export. The same author wrote 47 of the 47 compliant routes." width="100%">
 </p>
 
-<sub>Built for teams that ship with AI coding agents, maintainers who review many pull requests,
-and anyone who has found an unprotected route in production.</sub>
+Reading the output: `n=48 s=47 v=1` means 48 similar routes, 47 that check auth and 1 that doesn't.
+The exception is at `app/routes/items.py:244`. The last two lines are the evidence: the same
+person wrote all 47 routes that do check auth, so this looks like a slip, not a choice.
 
 ## Highlights
 
-<table>
-  <tr>
-    <td width="33%" valign="top"><h4>🎯 Finds the odd one out</h4>It learns your project's own conventions by counting, so there are no rules to write.</td>
-    <td width="33%" valign="top"><h4>🧮 Same code, same answer</h4>Finding the exceptions needs no AI, no API key, no network and no token bill.</td>
-    <td width="33%" valign="top"><h4>🔎 Evidence, not guesses</h4>Every finding comes with git history: who changed it, when, why, and how many of the protected items that person wrote.</td>
-  </tr>
-  <tr>
-    <td valign="top"><h4>🛡️ Safe on code you don't trust</h4>It reads and parses files and never runs them. Git evidence uses read-only commands.</td>
-    <td valign="top"><h4>🧩 A check is one Python file</h4>Adding support for your framework means writing one file, and a template shows how.</td>
-    <td valign="top"><h4>🧪 Tested on real projects</h4>Seven open-source projects, with the false alarms we found <a href="docs/tested-on-real-projects.md">written down</a>.</td>
-  </tr>
-</table>
+- **Finds the odd one out.** It learns your project's own conventions by counting, so there are
+  no rules to write.
+- **Deterministic.** The same code gives the same answer. Finding the exceptions needs no AI, no
+  API key and no network.
+- **Evidence, not guesses.** Each finding comes with git history: who changed it, when, why, and
+  how many of the protected items that person wrote.
+- **Safe to run on code you don't trust.** It reads and parses files and never runs them. Git
+  evidence uses read-only commands.
+- **Extensible.** A check is one Python file.
+- **Tested on real projects,** with the false alarms we found [written down](docs/tested-on-real-projects.md).
 
 ## Quick start
 
@@ -74,16 +75,21 @@ pip install -e ".[yaml]"
 python skills/deviant/scripts/mine.py --repo /path/to/your/project --with-git
 ```
 
-Add `--json` for machine-readable output. A PyPI release (`uvx deviant-scan .`) is planned.
+Add `--json` for machine-readable output. Output is coloured in a terminal and plain when piped
+(`--color never` and the `NO_COLOR` variable turn it off). A PyPI release (`uvx deviant-scan .`)
+is planned.
 
 ## How it works
 
-<p align="center">
-  <img src="docs/assets/how-it-works.svg" alt="Four steps: group similar things, count the pattern and the exceptions, show git evidence for each exception, and soon let Claude judge each one" width="100%">
-</p>
+1. **Group.** A check lists similar things: every FastAPI route, every CI job.
+2. **Count.** Plain math finds the pattern ("47 of 48 do this") and the rare exceptions. There
+   is no AI in this step.
+3. **Show the evidence.** Each exception comes with its git history.
+4. **Judge (planned).** A Claude Code skill will read the evidence and label each exception as a
+   bug, intentional or unsure.
 
-A pattern is only reported when the evidence is strong: a group of at least 20 similar items
-with one to three exceptions. Small projects will often show nothing, on purpose. The math is in
+A pattern is only reported when the evidence is strong: a group of at least 20 similar items with
+one to three exceptions. Small projects will often show nothing, on purpose. The math is in
 [how it works](docs/how-it-works.md) and the trade-offs are in [limits](docs/limits.md).
 
 ## What it checks
@@ -110,7 +116,7 @@ Deviant does not replace your linter or your reviewers. It finds what only count
 
 ## Honest by design
 
-Most tools show you their wins. We publish our misses too.
+We publish what Deviant got wrong, not only what it got right.
 
 - **Seven real projects scanned,** and the results read by hand.
 - **One candidate at the default settings.** It turned out to be intentional: the project's own
@@ -134,16 +140,15 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 
 ## Contribute
 
-Deviant is early, and early contributors shape what it becomes. **A check is one Python file.**
-If you know a framework well enough to say "every X should have a Y", you can add it.
+Deviant is early, and early contributors shape what it becomes. A check is one Python file. If
+you know a framework well enough to say "every X should have a Y", you can add it.
 
-<table>
-  <tr>
-    <td width="33%" valign="top"><h4>🧩 Add a check</h4>Copy the <a href="skills/deviant/scripts/detectors/_template.py">short template</a>. The <a href="CONTRIBUTING.md">guide</a> has a complete example and <a href="CONTRIBUTING.md#where-to-help">starter ideas</a>.</td>
-    <td width="33%" valign="top"><h4>🐞 Report a false alarm</h4>Deviant flagged something that is fine? These reports improve it fastest. <a href="https://github.com/ImalkaPerera/deviant/issues/new/choose">Open one</a>.</td>
-    <td width="33%" valign="top"><h4>🧪 Try it on your project</h4>Run it and tell us what it found or missed. Add it to <a href="docs/tested-on-real-projects.md">tested on real projects</a>.</td>
-  </tr>
-</table>
+- **Add a check.** Copy the [short template](skills/deviant/scripts/detectors/_template.py). The
+  [contributor guide](CONTRIBUTING.md) has a complete example and [starter ideas](CONTRIBUTING.md#where-to-help).
+- **Report a false alarm.** If Deviant flags something that is fine,
+  [open an issue](https://github.com/ImalkaPerera/deviant/issues/new/choose). These reports improve
+  it fastest.
+- **Try it on your project** and tell us what it found or missed.
 
 No API key is needed to run any test.
 
@@ -159,6 +164,4 @@ Related work: [Laravel `infer-conventions`](https://laravel.com/blog/extracting-
 [codebase-dna-guardian](https://github.com/mturac/codebase-dna-guardian),
 [Trail of Bits `semgrep-rule-creator`](https://lobehub.com/skills/trailofbits-skills-semgrep-rule-creator).
 
-<p align="center">
-  <sub>If Deviant would have caught a bug for you, a ⭐ helps others find it. · <a href="LICENSE">MIT license</a></sub>
-</p>
+[MIT license](LICENSE)
