@@ -89,9 +89,6 @@ def validate_items(items):
             raise ValueError(f"inconsistent feature names in {group}: {label}")
 
 
-_validate = validate_items
-
-
 def _has(item, feature):
     return item["features"].get(feature) is True
 
