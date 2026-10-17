@@ -204,7 +204,8 @@ def test_non_ascii_text_does_not_crash_a_console_that_cannot_print_it(tmp_path):
         [sys.executable, str(script), "--repo", str(root), "--with-git"],
         env=env,
         capture_output=True,
-        text=True,
     )
-    assert result.returncode == 0, result.stderr
-    assert "exception:" in result.stdout
+    # The scanner was told to write cp1252, so decode it as cp1252 on every platform.
+    stdout = result.stdout.decode("cp1252", errors="replace")
+    assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")
+    assert "exception:" in stdout
