@@ -1,9 +1,12 @@
 """Detector for FastAPI routes: auth, rate limits, response models, and mutation.
 
 Reads Python source with the ast module only. Never imports or runs project code.
-Auth can come from the route, its parameters, its router, any include_router call
-that adds the router to the app, or the FastAPI app itself. Those levels are
-followed across files by module name.
+
+Auth can come from the route, its parameters, its router, any include_router call that
+adds the router to the app, or the FastAPI app itself. Those levels are followed across
+files by module name, through imports, re-exports, aliases such as
+`CurrentUser = Annotated[User, Depends(get_current_user)]`, and dependency lists kept in
+variables. Routers may be created inside functions; each function has its own scope.
 """
 
 import ast
@@ -15,10 +18,11 @@ from pathlib import Path
 
 DETECTOR = "python_routes"
 PEER_GROUP = "fastapi_routes"
-ROUTE_METHODS = {"get", "post", "put", "patch", "delete"}
+ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 ROUTER_CALLS = {"APIRouter", "FastAPI"}
 DEPENDENCY_CALLS = {"Depends", "Security"}
+FASTAPI_PACKAGES = {"fastapi", "starlette"}
 # Whole words that mark an auth dependency. Inflections are listed because matching
 # is by whole word, so "auth" must not match "authors".
 AUTH_WORDS = {
@@ -76,6 +80,7 @@ AUTH_WORD_PAIRS = {("current", "user"), ("web", "user")}
 # "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
 RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
 MAX_BYTES = 1_000_000
+MAX_FOLLOW_DEPTH = 5
 SKIP_DIRS = {
     ".git",
     ".venv",
@@ -83,10 +88,14 @@ SKIP_DIRS = {
     "node_modules",
     "dist",
     "build",
+    "site-packages",
     "__pycache__",
     ".tox",
+    ".nox",
+    ".eggs",
     ".mypy_cache",
     ".pytest_cache",
+    ".ruff_cache",
 }
 
 
@@ -94,16 +103,11 @@ def extract(repo_root: str) -> list[dict]:
     root = Path(repo_root).resolve()
     extra_auth = _extra_auth_words(root)
     trees = _parse_files(root)
-    index = _module_index(trees)
-    imports = {rel: _imports(tree, rel) for rel, tree in trees.items()}
     found = {rel: _collect(tree) for rel, tree in trees.items()}
-    routers = _find_routers(found)
-    _add_include_edges(found, index, imports, routers)
-    aliases = _find_dependency_aliases(trees)
+    symbols = _Symbols(trees, found)
     items = []
-    for rel in trees:
-        resolver = _AliasResolver(rel, imports[rel], index, aliases)
-        items.extend(_routes_in_file(rel, found[rel].functions, routers, resolver, extra_auth))
+    for rel, info in found.items():
+        items.extend(_routes_in_file(rel, info, symbols, extra_auth))
     return items
 
 
@@ -115,6 +119,9 @@ def _extra_auth_words(root: Path) -> set[str]:
         return set()
     words = config.get("auth_words", []) if isinstance(config, dict) else []
     return {_normalise(w) for w in words if isinstance(w, str) and w.strip()}
+
+
+# --- reading files ------------------------------------------------------------------------
 
 
 def _parse_files(root: Path) -> dict[str, ast.Module]:
@@ -130,31 +137,63 @@ def _parse_files(root: Path) -> dict[str, ast.Module]:
             try:
                 if path.is_symlink() or path.stat().st_size > MAX_BYTES:
                     continue
-                # Parse bytes so a UTF-8 BOM or a coding cookie is handled like Python does.
-                trees[rel] = ast.parse(path.read_bytes(), filename=rel)
+                source = path.read_bytes()
             except OSError:
                 continue
-            except (SyntaxError, ValueError, RecursionError, MemoryError):
-                if not _looks_like_template(path):
-                    failed.append(rel)
+            tree = _parse(source, rel)
+            if tree is not None:
+                trees[rel] = tree
+            elif not _looks_like_template(source):
+                failed.append(rel)
     if failed:
         # A skipped file can hide the auth helpers other files import, so say so.
         version = ".".join(map(str, sys.version_info[:2]))
         shown = ", ".join(failed[:3]) + (" ..." if len(failed) > 3 else "")
         print(
             f"python_routes: could not parse {len(failed)} file(s) with Python {version}: "
-            f"{shown}. They may use newer syntax; results that depend on them can be wrong.",
+            f"{shown}. They have a syntax error or use syntax newer than this Python; "
+            "results that depend on them can be wrong.",
             file=sys.stderr,
         )
     return trees
 
 
-def _looks_like_template(path: Path) -> bool:
-    """Jinja and similar templates are not Python until rendered; skip them without a warning."""
+# Python 3.14 allows `except A, B:` without parentheses. Older versions reject it, so a
+# file that fails to parse is retried with the parentheses added.
+_BARE_EXCEPT = re.compile(r"^(\s*except\s+)([^()#:\n]+,[^()#:\n]+?)(\s*:)", re.MULTILINE)
+
+
+def _add_except_parentheses(match: re.Match) -> str:
+    if re.search(r"\bas\b", match.group(2)):
+        return match.group(0)
+    return f"{match.group(1)}({match.group(2)}){match.group(3)}"
+
+
+def _parse(source: bytes, filename: str) -> ast.Module | None:
+    """Parse a file, or None if it cannot be parsed.
+
+    Parsing bytes lets Python handle a byte order mark and a coding comment itself.
+    """
     try:
-        head = path.read_bytes()[:20_000]
-    except OSError:
-        return False
+        return ast.parse(source, filename=filename)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        pass
+    try:
+        text = source.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    patched = _BARE_EXCEPT.sub(_add_except_parentheses, text)
+    if patched == text:
+        return None
+    try:
+        return ast.parse(patched, filename=filename)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return None
+
+
+def _looks_like_template(source: bytes) -> bool:
+    """Jinja and similar templates are not Python until rendered; skip them without a warning."""
+    head = source[:20_000]
     return b"{%" in head or b"{{" in head
 
 
@@ -165,10 +204,10 @@ def _module_name(rel: str) -> str:
     return ".".join(parts)
 
 
-def _module_index(trees) -> dict[str, str | None]:
+def _module_index(files) -> dict[str, str | None]:
     """Map every dotted suffix of a module name to its file. Ambiguous suffixes map to None."""
     index: dict[str, str | None] = {}
-    for rel in trees:
+    for rel in files:
         segments = _module_name(rel).split(".")
         for i in range(len(segments)):
             key = ".".join(segments[i:])
@@ -177,6 +216,27 @@ def _module_index(trees) -> dict[str, str | None]:
             else:
                 index.setdefault(key, rel)
     return index
+
+
+# --- one pass over each syntax tree -------------------------------------------------------
+
+_ASSIGNMENTS = (ast.Assign, ast.AnnAssign) + ((ast.TypeAlias,) if hasattr(ast, "TypeAlias") else ())
+
+
+class _Found:
+    """What one pass over a file's syntax tree finds, so the tree is walked only once.
+
+    A scope is the tuple of ids of the functions enclosing a statement. The module itself
+    is the empty tuple.
+    """
+
+    def __init__(self):
+        self.assigned: list[tuple[tuple, str, ast.expr]] = []
+        self.functions: list[tuple[tuple, ast.FunctionDef | ast.AsyncFunctionDef]] = []
+        self.classes: list[ast.ClassDef] = []
+        self.imports: list[ast.Import | ast.ImportFrom] = []
+        self.include_calls: list[tuple[tuple, ast.Call]] = []
+        self.api_route_calls: list[tuple[tuple, ast.Call]] = []
 
 
 def _assigned_name(node):
@@ -195,159 +255,61 @@ def _assigned_name(node):
     return None
 
 
-class _Found:
-    """What one pass over a file's syntax tree finds, so the tree is walked only once."""
-
-    def __init__(self):
-        self.top_assigned: list[tuple[str, ast.expr]] = []
-        self.nested_assigned: list[tuple[str, ast.expr]] = []
-        self.include_calls: list[ast.Call] = []
-        self.functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
-
-
-_ASSIGNMENTS = (ast.Assign, ast.AnnAssign) + ((ast.TypeAlias,) if hasattr(ast, "TypeAlias") else ())
+# Fields of a statement that hold more statements. Expressions never contain a function,
+# class, import or assignment that matters here, so they are not visited.
+_STATEMENT_LISTS = ("body", "orelse", "finalbody", "handlers", "cases")
 
 
 def _collect(tree: ast.Module) -> _Found:
     found = _Found()
-    top_level = {id(n) for n in tree.body}
-    for node in ast.walk(tree):
+    stack: list[tuple[ast.AST, tuple]] = [(tree, ())]
+    while stack:  # a loop, not recursion, so deeply nested code cannot overflow the stack
+        node, scope = stack.pop()
+        inner = scope
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            found.functions.append(node)
-        elif isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Attribute) and func.attr == "include_router" and node.args:
-                found.include_calls.append(node)
+            found.functions.append((scope, node))
+            inner = scope + (id(node),)
+        elif isinstance(node, ast.ClassDef):
+            found.classes.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            found.imports.append(node)
+        elif isinstance(node, ast.Expr):
+            call = node.value
+            if isinstance(call, ast.Await):
+                call = call.value
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
+                if call.func.attr == "include_router" and call.args:
+                    found.include_calls.append((scope, call))
+                elif call.func.attr == "add_api_route":
+                    found.api_route_calls.append((scope, call))
         elif isinstance(node, _ASSIGNMENTS):
             assigned = _assigned_name(node)
             if assigned is not None:
-                target = found.top_assigned if id(node) in top_level else found.nested_assigned
-                target.append(assigned)
+                found.assigned.append((scope, assigned[0], assigned[1]))
+        for field in _STATEMENT_LISTS:
+            children = getattr(node, field, None)
+            if children:
+                stack.extend((child, inner) for child in children)
     return found
 
 
-def _find_routers(found):
-    """Routers and apps by (file, variable). Module-level names win over ones in functions."""
-    routers = {}
-    for rel, info in found.items():
-        for name, value in info.top_assigned + info.nested_assigned:
-            if not (isinstance(value, ast.Call) and _last_name(value.func) in ROUTER_CALLS):
-                continue
-            routers.setdefault((rel, name), {"deps": _keyword_dependencies(value), "parents": []})
-    return routers
+def _imports(nodes, rel):
+    """Import aliases of a file: alias -> {"full": dotted name, "from": (module, name) or None}.
 
-
-def _add_include_edges(found, index, imports, routers):
-    """Record each include_router call as (parent router, dependencies added) on the child."""
-    for rel, info in found.items():
-        for node in info.include_calls:
-            child = _resolve_router(node.args[0], rel, imports[rel], index, routers)
-            if child is None:
-                continue
-            parent = _resolve_router(node.func.value, rel, imports[rel], index, routers)
-            routers[child]["parents"].append((parent, _keyword_dependencies(node)))
-
-
-def _effective_dependencies(key, routers, seen=None):
-    """Dependencies a router's routes get from the router and every router that includes it.
-
-    A router included in several places gets the union of all of them.
+    Imports anywhere in the file count, including inside functions and `if TYPE_CHECKING`.
     """
-    seen = set() if seen is None else seen
-    if key in seen:
-        return []
-    seen.add(key)
-    info = routers[key]
-    names = list(info["deps"])
-    for parent, added in info["parents"]:
-        names += added
-        if parent is not None:
-            names += _effective_dependencies(parent, routers, seen)
-    return names
-
-
-def _find_dependency_aliases(trees):
-    """Module-level aliases like CurrentUser = Annotated[User, Depends(get_current_user)].
-
-    Maps (file, name) to (dependency names, type names). Type names are every name in the
-    alias, so `Annotated[AuthSubject[User], Depends(check)]` also records AuthSubject.
-    """
-    aliases = {}
-    for rel, tree in trees.items():
-        for node in tree.body:
-            assigned = _assigned_name(node)
-            if assigned is None:
-                continue
-            name, value = assigned
-            if isinstance(value, ast.Subscript) and _last_name(value.value) == "Annotated":
-                deps = _depends_names(value)
-                types = _type_names(value)
-                if deps or types:
-                    aliases[(rel, name)] = (deps, types)
-    return aliases
-
-
-def _type_names(expr) -> list[str]:
-    """Dotted names of every Name and Attribute in an annotation."""
-    names = []
-    for node in ast.walk(expr):
-        if isinstance(node, (ast.Name, ast.Attribute)):
-            dotted = _dotted(node)
-            if dotted:
-                names.append(dotted)
-    return names
-
-
-class _AliasResolver:
-    """Finds the dependencies behind an alias used in a route parameter annotation."""
-
-    def __init__(self, rel, imports, index, aliases):
-        self.rel, self.imports, self.index, self.aliases = rel, imports, index, aliases
-
-    def names_in(self, annotation) -> tuple[list[str], list[str]]:
-        """(dependency names, type names) behind any aliases used in the annotation."""
-        deps, types = [], []
-        for node in ast.walk(annotation):
-            key = self._alias_key(node)
-            if key is not None:
-                alias_deps, alias_types = self.aliases[key]
-                deps += alias_deps
-                types += alias_types
-        return deps, types
-
-    def _alias_key(self, node):
-        if isinstance(node, ast.Name):
-            if (self.rel, node.id) in self.aliases:
-                return (self.rel, node.id)
-            imported = self.imports.get(node.id)
-            if imported and imported["from"]:
-                module, name = imported["from"]
-                target = self.index.get(module)
-                if target and (target, name) in self.aliases:
-                    return (target, name)
-        elif isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            imported = self.imports.get(node.value.id)
-            if imported:
-                target = self.index.get(imported["full"])
-                if target and (target, node.attr) in self.aliases:
-                    return (target, node.attr)
-        return None
-
-
-def _imports(tree, rel):
-    """Top-level import aliases: alias -> {"full": dotted name, "from": (module, name) or None}."""
     package = _module_name(rel).split(".")
     if not rel.endswith("__init__.py"):
         package = package[:-1]
     out = {}
-    for node in tree.body:
+    for node in nodes:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 out[alias.asname or alias.name.split(".")[0]] = {
                     "full": alias.name,
                     "from": None,
                 }
-        elif isinstance(node, ast.ImportFrom):
+        else:
             # A relative import climbs node.level - 1 packages above the current one.
             base = package[: max(len(package) - (node.level - 1), 0)] if node.level else []
             module = ".".join(base + ([node.module] if node.module else []))
@@ -362,126 +324,388 @@ def _imports(tree, rel):
     return out
 
 
-def _resolve_router(expr, rel, imports, index, routers):
-    """Find the (file, variable) a router expression refers to, or None."""
-    if isinstance(expr, ast.Name):
-        if (rel, expr.id) in routers:
-            return (rel, expr.id)
-        imported = imports.get(expr.id)
-        if imported and imported["from"]:
-            module, name = imported["from"]
-            target = index.get(module)
-            if target and (target, name) in routers:
-                return (target, name)
+# --- symbols: routers, aliases and variables across files ---------------------------------
+
+
+class _Symbols:
+    """Everything needed to follow a name from one file to where it is defined."""
+
+    def __init__(self, trees, found):
+        self.found = found
+        self.index = _module_index(trees)
+        self.imports = {rel: _imports(info.imports, rel) for rel, info in found.items()}
+        self.router_names = _router_class_names(found)
+        self.dependency_calls = {}
+        self.router_calls = {}
+        for rel in found:
+            deps, routers = set(DEPENDENCY_CALLS), set(self.router_names)
+            for alias, imported in self.imports[rel].items():
+                module, original = imported["from"] or ("", "")
+                if module.split(".")[0] in FASTAPI_PACKAGES:
+                    if original in DEPENDENCY_CALLS:
+                        deps.add(alias)
+                    if original in ROUTER_CALLS:
+                        routers.add(alias)
+            self.dependency_calls[rel], self.router_calls[rel] = deps, routers
+        # Tables keyed (file, scope, name). Variables and aliases are module-level only.
+        self.consts: dict[tuple, ast.expr] = {}
+        self.aliases: dict[tuple, tuple[list[str], list[str]]] = {}
+        self.functions: dict[tuple, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+        self.routers: dict[tuple, dict] = {}
+        self._build()
+
+    def _build(self):
+        for rel, info in self.found.items():
+            for scope, name, value in info.assigned:
+                if scope == ():
+                    self.consts.setdefault((rel, (), name), value)
+            for scope, node in info.functions:
+                self.functions.setdefault((rel, scope, node.name), node)
+        for (rel, _, name), value in list(self.consts.items()):
+            if isinstance(value, ast.Subscript) and _last_name(value.value) == "Annotated":
+                self.aliases[(rel, (), name)] = (
+                    self.depends_names(value, rel),
+                    _type_names(value),
+                )
+        for rel, info in self.found.items():
+            for scope, name, value in info.assigned:
+                if isinstance(value, ast.Call) and _last_name(value.func) in self.router_calls[rel]:
+                    self.routers.setdefault(
+                        (rel, scope, name),
+                        {"deps": self.keyword_dependencies(value, rel), "parents": []},
+                    )
+        for rel, info in self.found.items():
+            for scope, call in info.include_calls:
+                child = self.find(call.args[0], rel, scope, self.routers)
+                if child is None:
+                    continue
+                parent = self.find(call.func.value, rel, scope, self.routers)
+                added = self.keyword_dependencies(call, rel)
+                self.routers[child]["parents"].append((parent, added))
+
+    # -- finding a name's definition --
+
+    def find(self, expr, rel, scope, table):
+        """The key in table that a Name or dotted attribute refers to, or None."""
+        if isinstance(expr, ast.Name):
+            for depth in range(len(scope), -1, -1):
+                key = (rel, scope[:depth], expr.id)
+                if key in table:
+                    return key
+            imported = self.imports[rel].get(expr.id)
+            if imported and imported["from"]:
+                module, original = imported["from"]
+                target = self.index.get(module)
+                if target:
+                    return self._exported(target, original, table, 0)
+            return None
+        dotted = _plain_dotted(expr)
+        if dotted is None or "." not in dotted:
+            return None
+        parts = dotted.split(".")
+        imported = self.imports[rel].get(parts[0])
+        modules = []
+        if imported:  # `import a.b as x` then x.c.thing, or `from a import b` then b.c.thing
+            modules.append(".".join([imported["full"], *parts[1:-1]]))
+        modules.append(".".join(parts[:-1]))  # `import a.b.c` then a.b.c.thing
+        for module in modules:
+            target = self.index.get(module)
+            if target:
+                key = self._exported(target, parts[-1], table, 0)
+                if key:
+                    return key
         return None
-    if isinstance(expr, ast.Attribute) and isinstance(expr.value, ast.Name):
-        imported = imports.get(expr.value.id)
-        if imported:
-            target = index.get(imported["full"])
-            if target and (target, expr.attr) in routers:
-                return (target, expr.attr)
-    return None
+
+    def _exported(self, target, name, table, depth):
+        """Key of `name` in file `target`, following `from .x import name` re-exports."""
+        key = (target, (), name)
+        if key in table:
+            return key
+        if depth >= MAX_FOLLOW_DEPTH:
+            return None
+        imported = self.imports[target].get(name)
+        if imported and imported["from"]:
+            module, original = imported["from"]
+            next_target = self.index.get(module)
+            if next_target and next_target != target:
+                return self._exported(next_target, original, table, depth + 1)
+        return None
+
+    # -- dependencies --
+
+    def depends_names(self, expr, rel, seen=None) -> list[str]:
+        """Names of callables used in Depends(...) or Security(...) anywhere in expr.
+
+        A variable that holds dependencies, such as AUTH = [Depends(get_user)], is followed.
+        """
+        seen = set() if seen is None else seen
+        names = []
+        stack = [expr]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, ast.Call) and _last_name(node.func) in self.dependency_calls[rel]:
+                target = node.args[0] if node.args else None
+                if target is None:
+                    target = next((k.value for k in node.keywords if k.arg == "dependency"), None)
+                if isinstance(target, ast.Call):  # Depends(RoleChecker(["admin"])) -> RoleChecker
+                    target = target.func
+                name = _dotted(target) if target is not None else None
+                if name:
+                    names.append(name)
+            elif isinstance(node, (ast.Name, ast.Attribute)):
+                key = self.find(node, rel, (), self.consts)
+                if key is not None and key not in seen:
+                    seen.add(key)
+                    value = self.consts[key]
+                    # A variable holding a router is not a list of dependencies, even
+                    # though the router's own constructor mentions some.
+                    is_router = (
+                        isinstance(value, ast.Call)
+                        and _last_name(value.func) in self.router_calls[key[0]]
+                    )
+                    if not is_router:
+                        names += self.depends_names(value, key[0], seen)
+            stack.extend(ast.iter_child_nodes(node))
+        return names
+
+    def keyword_dependencies(self, call, rel) -> list[str]:
+        names = []
+        for keyword in call.keywords:
+            if keyword.arg == "dependencies":
+                names += self.depends_names(keyword.value, rel)
+        return names
+
+    def alias_names(self, annotation, rel) -> tuple[list[str], list[str]]:
+        """(dependency names, type names) behind any aliases used in the annotation."""
+        deps, types = [], []
+        for node in ast.walk(annotation):
+            key = self.find(node, rel, (), self.aliases) if _is_name(node) else None
+            if key is not None:
+                alias_deps, alias_types = self.aliases[key]
+                deps += alias_deps
+                types += alias_types
+        return deps, types
+
+    def effective_dependencies(self, key, seen=None) -> list[str]:
+        """Dependencies a router's routes get from the router and every router that includes it.
+
+        A router included in several places gets the union of all of them.
+        """
+        seen = set() if seen is None else seen
+        if key in seen:
+            return []
+        seen.add(key)
+        info = self.routers[key]
+        names = list(info["deps"])
+        for parent, added in info["parents"]:
+            names += added
+            if parent is not None:
+                names += self.effective_dependencies(parent, seen)
+        return names
 
 
-def _routes_in_file(rel, functions, routers, resolver, extra_auth):
+def _router_class_names(found) -> set[str]:
+    """APIRouter, FastAPI, and every class that inherits from them (by name, repo-wide)."""
+    names = set(ROUTER_CALLS)
+    changed = True
+    while changed:
+        changed = False
+        for info in found.values():
+            for cls in info.classes:
+                if cls.name not in names and any(_last_name(b) in names for b in cls.bases):
+                    names.add(cls.name)
+                    changed = True
+    return names
+
+
+def _is_name(node) -> bool:
+    return isinstance(node, (ast.Name, ast.Attribute))
+
+
+# --- routes -------------------------------------------------------------------------------
+
+
+def _routes_in_file(rel, info, symbols, extra_auth):
     items = []
-    for node in functions:
+    for scope, node in info.functions:
         for dec in node.decorator_list:
             route = _route_decorator(dec)
             if route is None:
                 continue
-            router_name, method, path = route
-            if (rel, router_name) not in routers:
+            router_name, methods, path = route
+            key = symbols.find(ast.Name(id=router_name), rel, scope, symbols.routers)
+            if key is None:
                 continue
-            names = _effective_dependencies((rel, router_name), routers) + _depends_names(dec)
-            types: list[str] = []
-            for default in node.args.defaults + [d for d in node.args.kw_defaults if d]:
-                names += _depends_names(default)
-            for arg in _all_args(node.args):
-                if arg.annotation is not None:
-                    alias_deps, alias_types = resolver.names_in(arg.annotation)
-                    names += _depends_names(arg.annotation) + alias_deps
-                    types += alias_types + _type_names(arg.annotation)
+            names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(dec, rel)
+            more_names, types = _function_dependencies(node, rel, symbols)
+            names += more_names
             rate_decorator = any(
                 _is_rate(_dotted(d.func if isinstance(d, ast.Call) else d) or "")
                 for d in node.decorator_list
                 if d is not dec
             )
-            features = {
-                "is_mutating": method in MUTATING,
-                "has_auth": any(_is_auth(n, extra_auth) for n in names)
-                or any(_matches_auth_type(t) for t in types),
-                "has_response_model": isinstance(dec, ast.Call)
-                and any(kw.arg == "response_model" for kw in dec.keywords),
-                "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),
+            context = {
+                "function_name": node.name,
+                "decorators": [ast.unparse(d) for d in node.decorator_list],
+                "comments_near": [],
             }
+            for method in methods:
+                items.append(
+                    _item(
+                        rel, method, path, node.lineno, names, types, dec, rate_decorator,
+                        context, extra_auth,
+                    )
+                )  # fmt: skip
+    for scope, call in info.api_route_calls:
+        key = symbols.find(call.func.value, rel, scope, symbols.routers)
+        if key is None:
+            continue
+        names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(call, rel)
+        types: list[str] = []
+        endpoint = call.args[1] if len(call.args) > 1 else _keyword(call, "endpoint")
+        function = _function_named(endpoint, rel, scope, symbols)
+        if function is not None:
+            more_names, types = _function_dependencies(function, rel, symbols)
+            names += more_names
+        path = _string(call.args[0] if call.args else _keyword(call, "path"))
+        context = {
+            "function_name": function.name if function is not None else _dotted(endpoint),
+            "decorators": [],
+            "comments_near": [],
+        }
+        for method in _methods(_keyword(call, "methods"), default=["GET"]):
             items.append(
-                {
-                    "detector": DETECTOR,
-                    # Routes are compared within their own folder. A whole repo often mixes
-                    # auth styles, so a repo-wide rule rarely holds; a folder usually does.
-                    "peer_group": f"{PEER_GROUP}:{_folder(rel)}",
-                    "item_id": f"{method} {path}",
-                    "file": rel,
-                    "line": node.lineno,
-                    "features": features,
-                    "context": {
-                        "function_name": node.name,
-                        "decorators": [ast.unparse(d) for d in node.decorator_list],
-                        "comments_near": [],
-                    },
-                }
+                _item(
+                    rel, method, path, call.lineno, names, types, call, False, context, extra_auth
+                )
             )
     return items
 
 
+def _item(rel, method, path, line, names, types, call, rate_decorator, context, extra_auth):
+    features = {
+        "is_mutating": method in MUTATING,
+        "has_auth": any(_is_auth(n, extra_auth) for n in names)
+        or any(_matches_auth_type(t) for t in types),
+        "has_response_model": isinstance(call, ast.Call)
+        and any(kw.arg == "response_model" for kw in call.keywords),
+        "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),
+    }
+    return {
+        "detector": DETECTOR,
+        # Routes are compared within their own folder. A whole repo often mixes auth
+        # styles, so a repo-wide rule rarely holds; a folder usually does.
+        "peer_group": f"{PEER_GROUP}:{_folder(rel)}",
+        "item_id": f"{method} {path}",
+        "file": rel,
+        "line": line,
+        "features": features,
+        "context": dict(context),
+    }
+
+
+def _function_dependencies(node, rel, symbols):
+    """(dependency names, type names) from a route function's defaults and annotations."""
+    names: list[str] = []
+    types: list[str] = []
+    for default in node.args.defaults + [d for d in node.args.kw_defaults if d]:
+        names += symbols.depends_names(default, rel)
+    for arg in _all_args(node.args):
+        if arg.annotation is None:
+            continue
+        annotation = _annotation(arg.annotation)
+        alias_deps, alias_types = symbols.alias_names(annotation, rel)
+        names += symbols.depends_names(annotation, rel) + alias_deps
+        types += alias_types + _type_names(annotation)
+    return names, types
+
+
+def _annotation(expr):
+    """The expression behind an annotation. A string annotation such as "CurrentUser" is parsed."""
+    if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+        try:
+            return ast.parse(expr.value.strip(), mode="eval").body
+        except (SyntaxError, ValueError, RecursionError, MemoryError):
+            return ast.Constant(value=None)
+    return expr
+
+
+def _function_named(expr, rel, scope, symbols):
+    if expr is None or not _is_name(expr):
+        return None
+    key = symbols.find(expr, rel, scope, symbols.functions)
+    return symbols.functions[key] if key is not None else None
+
+
 def _folder(rel: str) -> str:
     """Folder of a file, relative to the scanned root. Files at the root give "."."""
-    folder = rel.rsplit("/", 1)[0] if "/" in rel else "."
-    return folder
+    return rel.rsplit("/", 1)[0] if "/" in rel else "."
 
 
 def _route_decorator(dec):
-    """Return (router variable, HTTP method, path) for @router.get("/x") style decorators."""
+    """Return (router variable, HTTP methods, path) for @router.get("/x") style decorators."""
     if not (
         isinstance(dec, ast.Call)
         and isinstance(dec.func, ast.Attribute)
-        and dec.func.attr in ROUTE_METHODS
         and isinstance(dec.func.value, ast.Name)
     ):
         return None
-    path = "<dynamic>"
-    if dec.args and isinstance(dec.args[0], ast.Constant) and isinstance(dec.args[0].value, str):
-        path = dec.args[0].value
-    return dec.func.value.id, dec.func.attr.upper(), path
+    attr = dec.func.attr
+    if attr in ROUTE_METHODS:
+        methods = [attr.upper()]
+    elif attr == "api_route":
+        methods = _methods(_keyword(dec, "methods"), default=["GET"])
+    else:
+        return None
+    path = _string(dec.args[0] if dec.args else _keyword(dec, "path"))
+    return dec.func.value.id, methods, path
+
+
+def _methods(expr, default):
+    """HTTP methods from a literal list such as ["GET", "POST"].
+
+    No methods argument gives the default. An argument that is not a literal list, such as
+    a variable, gives ["ANY"]: the methods are real but cannot be read from the source.
+    """
+    if expr is None:
+        return list(default)
+    if isinstance(expr, (ast.List, ast.Tuple, ast.Set)):
+        found = [
+            e.value.upper()
+            for e in expr.elts
+            if isinstance(e, ast.Constant) and isinstance(e.value, str)
+        ]
+        if found and len(found) == len(expr.elts):
+            return found
+    return ["ANY"]
+
+
+def _keyword(call, name):
+    return next((k.value for k in call.keywords if k.arg == name), None)
+
+
+def _string(expr) -> str:
+    """A literal string, or "<dynamic>" for anything computed."""
+    if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+        return expr.value
+    return "<dynamic>"
 
 
 def _all_args(args: ast.arguments):
     return list(args.posonlyargs) + list(args.args) + list(args.kwonlyargs)
 
 
-def _keyword_dependencies(call: ast.Call) -> list[str]:
-    names = []
-    for kw in call.keywords:
-        if kw.arg == "dependencies":
-            names += _depends_names(kw.value)
-    return names
+# --- names --------------------------------------------------------------------------------
 
 
-def _depends_names(expr) -> list[str]:
-    """Names of callables used in Depends(...) or Security(...) anywhere in expr."""
+def _type_names(expr) -> list[str]:
+    """Dotted names of every Name and Attribute in an annotation."""
     names = []
     for node in ast.walk(expr):
-        if not isinstance(node, ast.Call) or _last_name(node.func) not in DEPENDENCY_CALLS:
-            continue
-        if not node.args:
-            continue
-        target = node.args[0]
-        if isinstance(target, ast.Call):  # Depends(RoleChecker(["admin"])) -> RoleChecker
-            target = target.func
-        name = _dotted(target)
-        if name:
-            names.append(name)
+        if isinstance(node, (ast.Name, ast.Attribute)):
+            dotted = _dotted(node)
+            if dotted:
+                names.append(dotted)
     return names
 
 
@@ -493,6 +717,16 @@ def _dotted(node) -> str | None:
         return f"{base}.{node.attr}" if base else None
     if isinstance(node, ast.Call):
         return _dotted(node.func)
+    return None
+
+
+def _plain_dotted(node) -> str | None:
+    """A dotted name made only of names and attributes, with no calls in it."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base = _plain_dotted(node.value)
+        return f"{base}.{node.attr}" if base else None
     return None
 
 
