@@ -1,115 +1,166 @@
 {
  "selected_on": "2026-10-17",
  "rule": "Not used to write or tune detectors. FastAPI route counts come from the detector's extract() for counting only. GitHub Actions counts come from parsing the workflow YAML directly.",
- "repos": [
+ "selection": "Revised on 2026-10-17. First set replaced. FastAPI: at least 40 routes, open-source licence, ranked by clean auth-removal candidates. GitHub Actions: at least 30 jobs and steps, open-source licence, ranked by job-level timeout-minutes lines. Candidate rules are keyword-based and written before the detector was measured on these repos.",
+ "replaced": [
   {
    "name": "IBM/mcp-context-forge",
-   "url": "https://github.com/IBM/mcp-context-forge",
-   "commit": "86af292eeea89c155b437758b52e3b4b83fb9702",
-   "kind": "fastapi",
-   "counted": {
-    "routes": 727
-   },
-   "licence": "Apache-2.0"
+   "reason": "0 clean same-kind candidates under the strict rules"
   },
   {
    "name": "TracecatHQ/tracecat",
-   "url": "https://github.com/TracecatHQ/tracecat",
-   "commit": "0c0b9e3c0e0afe7baab18c7e9d63e9156fbcf5ab",
-   "kind": "fastapi",
-   "counted": {
-    "routes": 751
-   },
-   "licence": "AGPL-3.0"
+   "reason": "0 clean same-kind candidates under the strict rules"
   },
   {
    "name": "evroon/bracket",
-   "url": "https://github.com/evroon/bracket",
-   "commit": "d3885edc2a743f2789340ce5a199112bcfcd0220",
-   "kind": "fastapi",
-   "counted": {
-    "routes": 61
-   },
-   "licence": "AGPL-3.0"
+   "reason": "0 clean same-kind candidates under the strict rules; its past-bug record is kept separately"
   },
   {
    "name": "gamosoft/NoteDiscovery",
-   "url": "https://github.com/gamosoft/NoteDiscovery",
-   "commit": "95df96134f92ecdba68715aac6c386d75333477e",
-   "kind": "fastapi",
-   "counted": {
-    "routes": 50
-   },
-   "licence": "MIT"
+   "reason": "1 route with one auth-named dependency only; too few candidates"
   },
   {
    "name": "Anil-matcha/open-agent-email",
-   "url": "https://github.com/Anil-matcha/open-agent-email",
-   "commit": "6b9a514ca8df9e88a2540189197f52d407f012b0",
-   "kind": "fastapi",
-   "counted": {
-    "routes": 143
-   },
-   "licence": "Apache-2.0"
+   "reason": "0 clean same-kind candidates under the strict rules"
+  },
+  {
+   "name": "manor-os/manor-ai",
+   "reason": "Sustainable Use License, not an open-source licence"
+  },
+  {
+   "name": "dgiot/iotStudio",
+   "reason": "no licence"
   },
   {
    "name": "psf/black",
-   "url": "https://github.com/psf/black",
-   "commit": "11cff1312bf96e02bce9a467d0b5a2dd65300642",
-   "kind": "github_actions",
-   "counted": {
-    "jobs": 28,
-    "third_party_steps": 74
-   },
-   "licence": "MIT"
+   "reason": "no job-level timeout-minutes, so the timeout-removal test cannot run"
   },
   {
-   "name": "pytest-dev/pytest",
-   "url": "https://github.com/pytest-dev/pytest",
-   "commit": "cb6ff97bcb147f2bb5d9e0072c424dc03a452ba1",
-   "kind": "github_actions",
+   "name": "pallets/click",
+   "reason": "no job-level timeout-minutes, so the timeout-removal test cannot run"
+  },
+  {
+   "name": "httpie/cli",
+   "reason": "no job-level timeout-minutes, so the timeout-removal test cannot run"
+  }
+ ],
+ "repos": [
+  {
+   "name": "Shy2593666979/AgentChat",
+   "url": "https://github.com/Shy2593666979/AgentChat",
+   "commit": "71da583e8c16e7571e7defb9e3cd0d99a2fe6f2e",
+   "kind": "fastapi",
+   "licence": "MIT",
    "counted": {
-    "jobs": 12,
-    "third_party_steps": 24
+    "routes": 93
    },
-   "licence": "MIT"
+   "clean_auth_removal_candidates": 60
+  },
+  {
+   "name": "transmute-app/transmute",
+   "url": "https://github.com/transmute-app/transmute",
+   "commit": "7de1265fbfbbfd073c5c9a65ed1f7e45bc3ca50c",
+   "kind": "fastapi",
+   "licence": "MIT",
+   "counted": {
+    "routes": 73
+   },
+   "clean_auth_removal_candidates": 3
+  },
+  {
+   "name": "magicyuan876/mineru-tianshu",
+   "url": "https://github.com/magicyuan876/mineru-tianshu",
+   "commit": "46af54c0fd72d3363bd7c3b36c95fd1c0e8f46da",
+   "kind": "fastapi",
+   "licence": "Apache-2.0",
+   "counted": {
+    "routes": 48
+   },
+   "clean_auth_removal_candidates": 2
+  },
+  {
+   "name": "Idun-Group/idun-agent-platform",
+   "url": "https://github.com/Idun-Group/idun-agent-platform",
+   "commit": "f194355ae8b0a0c4d4d6cdd78ab39f4f899e5a7f",
+   "kind": "fastapi",
+   "licence": "GPL-3.0",
+   "counted": {
+    "routes": 77
+   },
+   "clean_auth_removal_candidates": 1
+  },
+  {
+   "name": "lalitgehani/SnackBase",
+   "url": "https://github.com/lalitgehani/SnackBase",
+   "commit": "3456d629c009e3d60360e7410df077336c499a85",
+   "kind": "fastapi",
+   "licence": "AGPL-3.0 (read from LICENSE file; GitHub reports NOASSERTION)",
+   "counted": {
+    "routes": 212
+   },
+   "clean_auth_removal_candidates": 0
   },
   {
    "name": "python/mypy",
    "url": "https://github.com/python/mypy",
    "commit": "9f5e075be1fa96d2e8c1e225f43bf664ae56c9af",
    "kind": "github_actions",
+   "licence": "MIT (LICENSE file; GitHub reports NOASSERTION)",
    "counted": {
     "jobs": 9,
-    "third_party_steps": 20
-   },
-   "licence": "MIT"
+    "third_party_steps": 20,
+    "jobs_with_timeout": 6
+   }
   },
   {
-   "name": "pallets/click",
-   "url": "https://github.com/pallets/click",
-   "commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6",
+   "name": "pytest-dev/pytest",
+   "url": "https://github.com/pytest-dev/pytest",
+   "commit": "cb6ff97bcb147f2bb5d9e0072c424dc03a452ba1",
    "kind": "github_actions",
+   "licence": "MIT",
    "counted": {
-    "jobs": 10,
-    "third_party_steps": 27
-   },
-   "licence": "BSD-3-Clause"
+    "jobs": 12,
+    "third_party_steps": 24,
+    "jobs_with_timeout": 6
+   }
   },
   {
-   "name": "httpie/cli",
-   "url": "https://github.com/httpie/cli",
-   "commit": "5b604c37c6c67e18e7c3e9aee6c88a8c22b98345",
+   "name": "astral-sh/uv",
+   "url": "https://github.com/astral-sh/uv",
+   "commit": "00c97356501aafa781b287d38feffe17f0dfa71f",
    "kind": "github_actions",
+   "licence": "Apache-2.0",
    "counted": {
-    "jobs": 15,
-    "third_party_steps": 36
-   },
-   "licence": "BSD-3-Clause"
+    "jobs": 178,
+    "third_party_steps": 547,
+    "jobs_with_timeout": 139
+   }
+  },
+  {
+   "name": "fastapi/fastapi",
+   "url": "https://github.com/fastapi/fastapi",
+   "commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "kind": "github_actions",
+   "licence": "MIT",
+   "counted": {
+    "jobs": 31,
+    "third_party_steps": 95,
+    "jobs_with_timeout": 28
+   }
+  },
+  {
+   "name": "tiangolo/typer",
+   "url": "https://github.com/tiangolo/typer",
+   "commit": "a5882dedf0bc7a46cd861fdfca020f88519e0f21",
+   "kind": "github_actions",
+   "licence": "MIT",
+   "counted": {
+    "jobs": 22,
+    "third_party_steps": 60,
+    "jobs_with_timeout": 20
+   }
   }
  ],
- "selection": "Hand-picked from GitHub search results (most-starred first), not a random sample. Chosen to be mature, public, and to meet the size rules in plan section 11.1.",
- "counting": "FastAPI: routes = items from python_routes.extract(). GitHub Actions: jobs and third-party uses from github_actions.extract(), which also reads composite actions.",
  "past_bug_candidates": [
   {
    "repo": "evroon/bracket",
