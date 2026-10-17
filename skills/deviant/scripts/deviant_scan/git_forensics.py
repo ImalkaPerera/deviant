@@ -117,7 +117,7 @@ class GitEvidence:
 
     def _blame_file(self, rel: str) -> dict[int, dict]:
         if rel not in self._blame:
-            output = _git(self.repo, ["blame", "--line-porcelain", "--", rel])
+            output = _git(self.repo, ["blame", "--line-porcelain", "--no-textconv", "--", rel])
             self._blame[rel] = _parse_blame(output, self._boundary) if output else {}
         return self._blame[rel]
 

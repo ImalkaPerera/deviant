@@ -233,3 +233,27 @@ def test_the_compliant_sample_never_exceeds_the_limit_and_keeps_order(total):
     assert len(sample) == min(total, 50)
     assert sample == sorted(sample)
     assert len(set(sample)) == len(sample)
+
+
+def test_blame_never_runs_a_textconv_program_from_the_repository(tmp_path):
+    root = make_repo(tmp_path)
+    (root / "f.txt").write_text("x = 1\n")
+    (root / ".gitattributes").write_text("f.txt diff=pwn\n")
+    git(root, "config", "diff.pwn.textconv", "sh -c 'echo ran > ran.txt; cat'")
+    commit_all(root)
+    gf.GitEvidence(root)._blame_file("f.txt")
+    assert not (root / "ran.txt").exists()
+
+
+def test_a_config_file_that_is_a_symlink_is_ignored(tmp_path):
+    from deviant_scan.detectors import python_routes as pr
+
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"auth_words": ["secret"]}')
+    root = tmp_path / "repo"
+    (root / ".deviant").mkdir(parents=True)
+    try:
+        (root / ".deviant" / "config.json").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlinks need extra rights on this system")
+    assert pr._extra_auth_words(root) == set()

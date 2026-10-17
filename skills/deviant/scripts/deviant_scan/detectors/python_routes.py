@@ -113,8 +113,11 @@ def extract(repo_root: str) -> list[dict]:
 
 def _extra_auth_words(root: Path) -> set[str]:
     """Words the user adds in .deviant/config.json under "auth_words"."""
+    path = root / ".deviant" / "config.json"
     try:
-        config = json.loads((root / ".deviant" / "config.json").read_text(encoding="utf-8"))
+        if path.is_symlink() or path.stat().st_size > MAX_BYTES:
+            return set()
+        config = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return set()
     words = config.get("auth_words", []) if isinstance(config, dict) else []
