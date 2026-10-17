@@ -10,7 +10,8 @@ from pathlib import Path
 
 DETECTOR = "github_actions"
 MAX_BYTES = 1_000_000
-SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+# A git commit SHA, or a Docker image digest. Both name exactly one immutable thing.
+SHA_RE = re.compile(r"^([0-9a-fA-F]{40}|sha256:[0-9a-fA-F]{64})$")
 
 
 def extract(repo_root: str) -> list[dict]:
@@ -31,8 +32,8 @@ def extract(repo_root: str) -> list[dict]:
         try:
             text = path.read_text(encoding="utf-8")
             data = yaml.safe_load(text)
-        except (OSError, UnicodeDecodeError, yaml.YAMLError):
-            continue
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError, MemoryError):
+            continue  # one unreadable or hostile file must not stop the rest
         if not isinstance(data, dict):
             continue
         lines = text.splitlines()

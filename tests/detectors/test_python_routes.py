@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -185,3 +186,25 @@ def test_jinja_templates_are_skipped_without_a_warning(tmp_path, capsys):
     (tmp_path / "gen.py").write_text("from {{ module }} import x\n{% for a in b %}\n")
     assert pr.extract(str(tmp_path)) == []
     assert capsys.readouterr().err == ""
+
+
+@pytest.mark.skipif(sys.version_info < (3, 12), reason="`type` statements need Python 3.12")
+def test_type_statement_aliases_count_as_dependency_aliases(tmp_path):
+    (tmp_path / "r.py").write_text(
+        "from typing import Annotated\n"
+        "from fastapi import APIRouter, Depends\n"
+        "from app.auth import get_current_user\n"
+        "type CurrentUser = Annotated[dict, Depends(get_current_user)]\n"
+        "router = APIRouter()\n"
+        "@router.post('/x')\n"
+        "def x(user: CurrentUser):\n    return {}\n"
+    )
+    assert pr.extract(str(tmp_path))[0]["features"]["has_auth"]
+
+
+def test_a_hostile_nested_file_does_not_stop_the_other_files(tmp_path):
+    (tmp_path / "nest.py").write_text("x = " + "[" * 200000 + "]" * 200000 + "\n")
+    (tmp_path / "ok.py").write_text(
+        "from fastapi import APIRouter\nrouter = APIRouter()\n@router.post('/a')\ndef a(): pass\n"
+    )
+    assert [i["item_id"] for i in pr.extract(str(tmp_path))] == ["POST /a"]

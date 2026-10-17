@@ -96,13 +96,14 @@ def extract(repo_root: str) -> list[dict]:
     trees = _parse_files(root)
     index = _module_index(trees)
     imports = {rel: _imports(tree, rel) for rel, tree in trees.items()}
-    routers = _find_routers(trees)
-    _add_include_edges(trees, index, imports, routers)
+    found = {rel: _collect(tree) for rel, tree in trees.items()}
+    routers = _find_routers(found)
+    _add_include_edges(found, index, imports, routers)
     aliases = _find_dependency_aliases(trees)
     items = []
-    for rel, tree in trees.items():
+    for rel in trees:
         resolver = _AliasResolver(rel, imports[rel], index, aliases)
-        items.extend(_routes_in_file(rel, tree, routers, resolver, extra_auth))
+        items.extend(_routes_in_file(rel, found[rel].functions, routers, resolver, extra_auth))
     return items
 
 
@@ -133,7 +134,7 @@ def _parse_files(root: Path) -> dict[str, ast.Module]:
                 trees[rel] = ast.parse(path.read_bytes(), filename=rel)
             except OSError:
                 continue
-            except (SyntaxError, ValueError):
+            except (SyntaxError, ValueError, RecursionError, MemoryError):
                 if not _looks_like_template(path):
                     failed.append(rel)
     if failed:
@@ -179,11 +180,14 @@ def _module_index(trees) -> dict[str, str | None]:
 
 
 def _assigned_name(node):
-    """(name, value) for `x = value` or `x: T = value`, else None."""
+    """(name, value) for `x = value`, `x: T = value` or `type x = value`, else None."""
     if isinstance(node, ast.Assign) and len(node.targets) == 1:
         target = node.targets[0]
     elif isinstance(node, ast.AnnAssign) and node.value is not None:
         target = node.target
+    elif hasattr(ast, "TypeAlias") and isinstance(node, ast.TypeAlias):
+        # `type CurrentUser = Annotated[...]`, Python 3.12 and newer
+        return (node.name.id, node.value) if isinstance(node.name, ast.Name) else None
     else:
         return None
     if isinstance(target, ast.Name):
@@ -191,34 +195,52 @@ def _assigned_name(node):
     return None
 
 
-def _find_routers(trees):
+class _Found:
+    """What one pass over a file's syntax tree finds, so the tree is walked only once."""
+
+    def __init__(self):
+        self.top_assigned: list[tuple[str, ast.expr]] = []
+        self.nested_assigned: list[tuple[str, ast.expr]] = []
+        self.include_calls: list[ast.Call] = []
+        self.functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+
+
+_ASSIGNMENTS = (ast.Assign, ast.AnnAssign) + ((ast.TypeAlias,) if hasattr(ast, "TypeAlias") else ())
+
+
+def _collect(tree: ast.Module) -> _Found:
+    found = _Found()
+    top_level = {id(n) for n in tree.body}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            found.functions.append(node)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr == "include_router" and node.args:
+                found.include_calls.append(node)
+        elif isinstance(node, _ASSIGNMENTS):
+            assigned = _assigned_name(node)
+            if assigned is not None:
+                target = found.top_assigned if id(node) in top_level else found.nested_assigned
+                target.append(assigned)
+    return found
+
+
+def _find_routers(found):
     """Routers and apps by (file, variable). Module-level names win over ones in functions."""
     routers = {}
-    for rel, tree in trees.items():
-        top_level = {id(n) for n in tree.body}
-        nested = [n for n in ast.walk(tree) if id(n) not in top_level]
-        for node in list(tree.body) + nested:
-            assigned = _assigned_name(node)
-            if assigned is None:
-                continue
-            name, value = assigned
+    for rel, info in found.items():
+        for name, value in info.top_assigned + info.nested_assigned:
             if not (isinstance(value, ast.Call) and _last_name(value.func) in ROUTER_CALLS):
                 continue
             routers.setdefault((rel, name), {"deps": _keyword_dependencies(value), "parents": []})
     return routers
 
 
-def _add_include_edges(trees, index, imports, routers):
+def _add_include_edges(found, index, imports, routers):
     """Record each include_router call as (parent router, dependencies added) on the child."""
-    for rel, tree in trees.items():
-        for node in ast.walk(tree):
-            if not (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "include_router"
-                and node.args
-            ):
-                continue
+    for rel, info in found.items():
+        for node in info.include_calls:
             child = _resolve_router(node.args[0], rel, imports[rel], index, routers)
             if child is None:
                 continue
@@ -361,11 +383,9 @@ def _resolve_router(expr, rel, imports, index, routers):
     return None
 
 
-def _routes_in_file(rel, tree, routers, resolver, extra_auth):
+def _routes_in_file(rel, functions, routers, resolver, extra_auth):
     items = []
-    for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
+    for node in functions:
         for dec in node.decorator_list:
             route = _route_decorator(dec)
             if route is None:
@@ -390,7 +410,7 @@ def _routes_in_file(rel, tree, routers, resolver, extra_auth):
             features = {
                 "is_mutating": method in MUTATING,
                 "has_auth": any(_is_auth(n, extra_auth) for n in names)
-                or any(_matches(t, AUTH_TYPE_WORDS) for t in types),
+                or any(_matches_auth_type(t) for t in types),
                 "has_response_model": isinstance(dec, ast.Call)
                 and any(kw.arg == "response_model" for kw in dec.keywords),
                 "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),

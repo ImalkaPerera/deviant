@@ -109,3 +109,31 @@ def test_same_repo_reusable_workflow_written_with_dollar_slash_is_local():
     assert gha._is_local("./.github/workflows/build.yml")
     assert gha._is_local("$/.github/workflows/build.yml")
     assert not gha._is_local("actions/checkout@v4")
+
+
+def test_docker_image_pinned_by_digest_counts_as_pinned(tmp_path):
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    digest = "a" * 64
+    (workflows / "d.yml").write_text(
+        "name: d\njobs:\n  b:\n    runs-on: x\n    steps:\n"
+        f"      - uses: docker://alpine@sha256:{digest}\n"
+        "      - uses: docker://alpine:3.20\n"
+    )
+    pinned = {
+        i["item_id"]: i["features"]["pinned_to_sha"]
+        for i in gha.extract(str(tmp_path))
+        if i["peer_group"] == "gha_third_party_steps"
+    }
+    assert pinned == {f"docker://alpine@sha256:{digest}": True, "docker://alpine:3.20": False}
+
+
+def test_a_hostile_nested_file_does_not_stop_the_other_workflows(tmp_path):
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "deep.yml").write_text("a: " + "[" * 50000 + "]" * 50000 + "\n")
+    (workflows / "ok.yml").write_text(
+        "name: ok\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: a/b@v1\n"
+    )
+    ids = {i["item_id"] for i in gha.extract(str(tmp_path))}
+    assert "a/b@v1" in ids
