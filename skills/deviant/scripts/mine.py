@@ -7,6 +7,8 @@ exception when --with-git is used.
 import argparse
 import importlib.util
 import json
+import os
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -35,19 +37,59 @@ def group_items(items):
     return groups
 
 
-def _validate(items):
+# Detector and feature names go into rule ids as detector.peer_group.feature. Keeping dots
+# out of them is what lets parse_rule_id split a rule id back apart, even when the peer
+# group holds a folder name such as "v1.2".
+_NAME = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def validate_items(items):
+    """Raise ValueError unless every item follows the detector contract.
+
+    A mistake here would otherwise change results silently: a truthy number counted as
+    False, a string line number breaking the sort, or a feature missing from one item.
+    """
+    if not isinstance(items, list):
+        raise ValueError(f"extract() must return a list, not {type(items).__name__}")
+    names_by_group = {}
     for item in items:
+        if not isinstance(item, dict):
+            raise ValueError(f"item must be a dict, not {type(item).__name__}")
         missing = [k for k in REQUIRED_KEYS if k not in item]
         if missing:
             raise ValueError(f"detector item missing keys {missing}: {item.get('item_id')}")
-    # A feature missing from one item would silently count as False, so every item in a
-    # peer group must report the same feature names.
-    names_by_group = {}
-    for item in items:
+        label = item["item_id"]
+        if not isinstance(item["detector"], str) or not _NAME.match(item["detector"]):
+            raise ValueError(f"detector must be letters, digits and underscores: {label!r}")
+        if not isinstance(item["peer_group"], str) or not item["peer_group"]:
+            raise ValueError(f"peer_group must be a non-empty string: {label!r}")
+        if not isinstance(item["item_id"], str) or not item["item_id"]:
+            raise ValueError("item_id must be a non-empty string")
+        if not isinstance(item["file"], str) or not item["file"]:
+            raise ValueError(f"file must be a non-empty string: {label!r}")
+        line = item["line"]
+        if isinstance(line, bool) or not isinstance(line, int) or line < 1:
+            raise ValueError(f"line must be an integer of at least 1: {label!r}")
+        features = item["features"]
+        if not isinstance(features, dict):
+            raise ValueError(f"features must be a dict: {label!r}")
+        for name, value in features.items():
+            if not isinstance(name, str) or not _NAME.match(name) or "_implies_" in name:
+                raise ValueError(
+                    f"feature name must be letters, digits, underscores, without "
+                    f"'_implies_': {name!r}"
+                )
+            if not isinstance(value, bool):
+                raise ValueError(f"feature {name!r} must be a bool, not {value!r}: {label!r}")
+        # A feature missing from one item would silently count as False, so every item in
+        # a peer group must report the same feature names.
         group = (item["detector"], item["peer_group"])
-        names_by_group.setdefault(group, set(item["features"]))
-        if set(item["features"]) != names_by_group[group]:
-            raise ValueError(f"inconsistent feature names in {group}: {item['item_id']}")
+        names_by_group.setdefault(group, set(features))
+        if set(features) != names_by_group[group]:
+            raise ValueError(f"inconsistent feature names in {group}: {label}")
+
+
+_validate = validate_items
 
 
 def _has(item, feature):
@@ -125,9 +167,20 @@ def mine(
 
     With repo_root, each exception also gets a "git" block from the history of its line.
     """
-    _validate(items)
+    validate_items(items)
+    # The same item reported twice would inflate the group, so keep one of each.
+    unique = {}
+    for entry in items:
+        key = (
+            entry["detector"],
+            entry["peer_group"],
+            entry["item_id"],
+            entry["file"],
+            entry["line"],
+        )
+        unique.setdefault(key, entry)
     # Sort first so the output does not depend on the order detectors return items.
-    items = sorted(items, key=lambda i: (i["file"], i["line"], i["item_id"]))
+    items = sorted(unique.values(), key=lambda i: (i["file"], i["line"], i["item_id"]))
     best_by_exceptions = {}
     for (detector, peer), members in group_items(items).items():
         for rule in _candidates(detector, peer, members, min_items, min_confidence):
@@ -176,12 +229,40 @@ def load_detectors(detectors_dir: Path):
 def collect_items(repo_root: Path, detectors_dir: Path):
     items = []
     for module in load_detectors(detectors_dir):
+        name = module.__name__.removeprefix("deviant_detector_")
         try:
-            items.extend(module.extract(str(repo_root)))
+            found = module.extract(str(repo_root))
         except Exception as error:  # one broken detector must not stop the scan
-            name = module.__name__.removeprefix("deviant_detector_")
             print(f"warning: detector {name} failed and was skipped: {error}", file=sys.stderr)
+            continue
+        try:
+            validate_items(found)
+        except ValueError as error:  # bad output from one detector must not poison the rest
+            print(f"warning: detector {name} returned invalid items: {error}", file=sys.stderr)
+            continue
+        items.extend(found)
     return items
+
+
+def parse_rule_id(rule_id: str) -> dict:
+    """Split detector.peer_group.feature back into its parts.
+
+    The detector and the feature never contain dots but the peer group can (a folder such
+    as "v1.2"), so split once from the left and once from the right.
+    """
+    if rule_id.count(".") < 2:
+        raise ValueError(f"not a rule id: {rule_id!r}")
+    detector, rest = rule_id.split(".", 1)
+    peer_group, name = rest.rsplit(".", 1)
+    condition = None
+    if "_implies_" in name:
+        condition, name = name.split("_implies_", 1)
+    return {
+        "detector": detector,
+        "peer_group": peer_group,
+        "condition": condition,
+        "feature": name,
+    }
 
 
 def _format_text(rules):
@@ -231,11 +312,31 @@ def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=F
     return 0
 
 
+def _positive_int(text):
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
+def _fraction(text):
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+    if not 0.0 <= value <= 1.0:  # also rejects nan
+        raise argparse.ArgumentTypeError("must be between 0 and 1")
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Find rules that similar items follow.")
     parser.add_argument("--repo", default=".", help="repository root to scan")
-    parser.add_argument("--min-items", type=int, default=DEFAULT_MIN_ITEMS)
-    parser.add_argument("--min-confidence", type=float, default=DEFAULT_MIN_CONFIDENCE)
+    parser.add_argument("--min-items", type=_positive_int, default=DEFAULT_MIN_ITEMS)
+    parser.add_argument("--min-confidence", type=_fraction, default=DEFAULT_MIN_CONFIDENCE)
     parser.add_argument("--json", action="store_true", help="print JSON")
     parser.add_argument(
         "--with-git", action="store_true", help="add the git history of each exception"
@@ -246,14 +347,23 @@ def main(argv=None):
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
-    return run(
-        args.repo,
-        DETECTORS_DIR,
-        args.min_items,
-        args.min_confidence,
-        args.json,
-        with_git=args.with_git,
-    )
+    try:
+        return run(
+            args.repo,
+            DETECTORS_DIR,
+            args.min_items,
+            args.min_confidence,
+            args.json,
+            with_git=args.with_git,
+        )
+    except BrokenPipeError:
+        # The reader went away (for example `| head`). Point stdout at the null device so
+        # the interpreter does not fail again while flushing at exit.
+        try:
+            sys.stdout = open(os.devnull, "w")  # noqa: SIM115
+        except OSError:
+            pass
+        return 0
 
 
 if __name__ == "__main__":

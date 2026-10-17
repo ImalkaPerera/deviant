@@ -21,7 +21,9 @@ def wilson_lower_bound(s: int, n: int, z: float = Z_95) -> float:
     z2 = z * z
     centre = p + z2 / (2 * n)
     margin = z * sqrt(p * (1 - p) / n + z2 / (4 * n * n))
-    return (centre - margin) / (1 + z2 / n)
+    bound = (centre - margin) / (1 + z2 / n)
+    # Rounding can push the result a hair outside [0, 1], for example -3e-17 when s is 0.
+    return min(1.0, max(0.0, bound))
 
 
 def passes_filter(
