@@ -7,6 +7,7 @@ is left out and the scan still works.
 
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +28,7 @@ INTENT_WORDS = (
 UNCOMMITTED = "0" * 40
 COMMENT_LOOKBACK = 3
 _SHA = re.compile(r"^([0-9a-f]{40}) \d+ (\d+)")
+_warned_timeouts: set[str] = set()
 
 
 def _git(repo: str, args: list[str]) -> str | None:
@@ -43,7 +45,17 @@ def _git(repo: str, args: list[str]) -> str | None:
             timeout=GIT_TIMEOUT_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        # Say so once per kind of command, so a slow disk does not bury the output.
+        if args[0] not in _warned_timeouts:
+            _warned_timeouts.add(args[0])
+            print(
+                f"warning: git {args[0]} timed out after {GIT_TIMEOUT_SECONDS}s, "
+                "so that evidence is skipped",
+                file=sys.stderr,
+            )
+        return None
+    except OSError:
         return None
     return result.stdout if result.returncode == 0 else None
 
@@ -74,12 +86,17 @@ class GitEvidence:
         if info is None:
             return None
         commit = self._commit(info["commit"]) if info["commit"] else None
-        author_email = info["email"]
+        # An uncommitted line has no author: git reports a placeholder address for it.
+        author_email = info["email"] if info["commit"] and info["email"] else None
         sample = _evenly_spaced(compliant, MAX_COMPLIANT_CHECKED)
-        followed = sum(
-            1
-            for c_file, c_line in sample
-            if (self.line_author(c_file, c_line) or {}).get("email") == author_email
+        followed = (
+            sum(
+                1
+                for c_file, c_line in sample
+                if (self.line_author(c_file, c_line) or {}).get("email") == author_email
+            )
+            if author_email
+            else 0
         )
         return {
             # In a shallow clone, git blames old lines on the oldest fetched commit. That

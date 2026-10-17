@@ -198,6 +198,13 @@ def mine(
                 best_by_exceptions[key] = rule
     rules = sorted(best_by_exceptions.values(), key=_sort_key)
     evidence = GitEvidence(Path(repo_root)) if repo_root is not None and rules else None
+    if evidence is not None and not evidence.available:
+        print(
+            "warning: no git evidence added: git is missing or "
+            f"{repo_root} is not inside a git repository",
+            file=sys.stderr,
+        )
+        evidence = None
     for rule in rules:
         for exception in rule["exceptions"]:
             if evidence is not None:
@@ -274,8 +281,11 @@ def _format_text(rules):
             lines.append(f"  exception: {e['file']}:{e['line']} ({e['item_id']})")
             git = e.get("git")
             if git:
-                where = "uncommitted" if git["uncommitted"] else f"{git['commit']} {git['date']}"
-                lines.append(f"    last changed: {where} by {git['author']}")
+                if git["uncommitted"]:
+                    lines.append("    last changed: uncommitted changes")
+                else:
+                    who = f" by {git['author']}" if git["author"] else ""
+                    lines.append(f"    last changed: {git['commit']} {git['date']}{who}")
                 lines.append(f"    commit: {git['subject']}")
                 lines.append(
                     f"    same author followed the rule in {git['author_followed_rule_elsewhere']}"
