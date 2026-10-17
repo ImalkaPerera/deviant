@@ -43,6 +43,15 @@ def spaced(items, count):
     return [items[int(i * step)] for i in range(count)]
 
 
+def read_source(path):
+    """Read a file without changing its line endings."""
+    return path.read_bytes().decode("utf-8")
+
+
+def write_source(path, text):
+    path.write_bytes(text.encode("utf-8"))
+
+
 def sha_of(repo_dir):
     return subprocess.run(
         ["git", "-C", str(repo_dir), "rev-parse", "HEAD"], capture_output=True, text=True
@@ -113,7 +122,7 @@ def fastapi_candidates(root):
         if any(part in {".venv", "venv", "node_modules", "tests", "test"} for part in path.parts):
             continue
         try:
-            source = path.read_text(encoding="utf-8")
+            source = read_source(path)
             tree = ast.parse(source)
         except (SyntaxError, UnicodeDecodeError, ValueError):
             continue
@@ -151,7 +160,7 @@ def plant_fastapi_same(root, manifest, repo):
     cands = fastapi_candidates(root)
     chosen = spaced(cands, PER_REPO["same_fastapi"])
     for path, node, dep in chosen:
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = read_source(path).split("\n")
         i = dep.lineno - 1
         original = lines[i]
         segment = ast.get_source_segment("\n".join(lines), dep)
@@ -163,7 +172,7 @@ def plant_fastapi_same(root, manifest, repo):
             ast.parse(text)
         except SyntaxError:
             continue
-        path.write_text(text, encoding="utf-8")
+        write_source(path, text)
         manifest.append(
             {
                 "id": f"{repo}:same_fastapi:{path.relative_to(root).as_posix()}:{dep.lineno}",
@@ -186,7 +195,7 @@ def plant_fastapi_other(root, manifest, repo):
         if any(part in {".venv", "venv", "node_modules", "tests", "test"} for part in path.parts):
             continue
         try:
-            text = path.read_text(encoding="utf-8")
+            text = read_source(path)
             tree = ast.parse(text)
         except (SyntaxError, UnicodeDecodeError, ValueError):
             continue
@@ -212,14 +221,14 @@ def plant_fastapi_other(root, manifest, repo):
                         sites.append((path, sub.lineno, line))
                         break
     for path, lineno, original in spaced(sites, PER_REPO["other_fastapi"]):
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = read_source(path).split("\n")
         lines[lineno - 1] = original.replace("if not ", "if ", 1)
         text = "\n".join(lines)
         try:
             ast.parse(text)
         except SyntaxError:
             continue
-        path.write_text(text, encoding="utf-8")
+        write_source(path, text)
         manifest.append(
             {
                 "id": f"{repo}:other_fastapi:{path.relative_to(root).as_posix()}:{lineno}",
@@ -248,13 +257,13 @@ def plant_gha_same(root, manifest, repo):
     """Delete one job-level timeout-minutes line."""
     sites = []
     for path in workflow_files(root):
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = read_source(path).split("\n")
         for i, line in enumerate(lines):
             m = re.match(r"^(\s{4})timeout-minutes:\s*\S+\s*$", line)
             if m:
                 sites.append((path, i, line))
     for path, i, line in spaced(sites, PER_REPO["same_gha"]):
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = read_source(path).split("\n")
         if lines[i] != line:
             continue
         del lines[i]
@@ -265,7 +274,7 @@ def plant_gha_same(root, manifest, repo):
             yaml.safe_load(text)
         except Exception:
             continue
-        path.write_text(text, encoding="utf-8")
+        write_source(path, text)
         manifest.append(
             {
                 "id": f"{repo}:same_gha:{path.relative_to(root).as_posix()}:{i + 1}",
@@ -316,7 +325,7 @@ def plant_gha_other(root, manifest, repo):
     """Add `continue-on-error: true` after a single-line `run:`. No detector checks it."""
     sites = []
     for path in workflow_files(root):
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = read_source(path).split("\n")
         for i, line in enumerate(lines):
             m = re.match(r"^(\s+)run:\s+([^|>\s].*)$", line)
             if not m or NEVER_FAILS.match(m.group(2)):
@@ -325,9 +334,10 @@ def plant_gha_other(root, manifest, repo):
                 continue
             sites.append((path, i, m.group(1)))
     for path, i, indent in spaced(sites, PER_REPO["other_gha"]):
-        lines = path.read_text(encoding="utf-8").split("\n")
+        lines = read_source(path).split("\n")
         original = lines[i]
-        lines.insert(i + 1, f"{indent}continue-on-error: true")
+        eol = "\r" if original.endswith("\r") else ""
+        lines.insert(i + 1, f"{indent}continue-on-error: true{eol}")
         text = "\n".join(lines)
         try:
             import yaml
@@ -335,7 +345,7 @@ def plant_gha_other(root, manifest, repo):
             yaml.safe_load(text)
         except Exception:
             continue
-        path.write_text(text, encoding="utf-8")
+        write_source(path, text)
         manifest.append(
             {
                 "id": f"{repo}:other_gha:{path.relative_to(root).as_posix()}:{i + 1}",
