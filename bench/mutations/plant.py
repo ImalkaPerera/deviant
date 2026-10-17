@@ -280,15 +280,50 @@ def plant_gha_same(root, manifest, repo):
         )
 
 
+# Commands that cannot fail in a way that matters. Planting "ignore failure" on these changes
+# nothing, so they are not valid planted bugs.
+NEVER_FAILS = re.compile(r"^(echo|printf|exit 0|true|chmod)\b")
+
+
+def _indent(text):
+    return len(text) - len(text.lstrip())
+
+
+def step_sets_continue_on_error(lines, run_index):
+    """True if the step that holds this run: line already sets continue-on-error.
+
+    A step starts at a "- " item marker. Its block runs until the next item marker at the same
+    or a lower indent.
+    """
+    run_indent = _indent(lines[run_index])
+    start = run_index
+    while start > 0:
+        text = lines[start]
+        if text.lstrip().startswith("- ") and _indent(text) < run_indent:
+            break
+        start -= 1
+    item_indent = _indent(lines[start])
+    end = run_index + 1
+    while end < len(lines):
+        text = lines[end]
+        if text.strip() and text.lstrip().startswith("- ") and _indent(text) <= item_indent:
+            break
+        end += 1
+    return any("continue-on-error" in lines[k] for k in range(start, end))
+
+
 def plant_gha_other(root, manifest, repo):
     """Add `continue-on-error: true` after a single-line `run:`. No detector checks it."""
     sites = []
     for path in workflow_files(root):
         lines = path.read_text(encoding="utf-8").split("\n")
         for i, line in enumerate(lines):
-            m = re.match(r"^(\s+)run:\s+[^|>\s].*$", line)
-            if m:
-                sites.append((path, i, m.group(1)))
+            m = re.match(r"^(\s+)run:\s+([^|>\s].*)$", line)
+            if not m or NEVER_FAILS.match(m.group(2)):
+                continue
+            if step_sets_continue_on_error(lines, i):
+                continue
+            sites.append((path, i, m.group(1)))
     for path, i, indent in spaced(sites, PER_REPO["other_gha"]):
         lines = path.read_text(encoding="utf-8").split("\n")
         original = lines[i]
