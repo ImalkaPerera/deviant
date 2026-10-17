@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from mine import _format_text, main, mine, should_color
+from deviant_scan.mine import _format_text, main, mine, should_color
 
 SCRIPT = Path(__file__).resolve().parent.parent / "skills" / "deviant" / "scripts" / "mine.py"
 ANSI = re.compile(r"\x1b\[[0-9;]*m")

@@ -4,7 +4,7 @@ A detector turns one kind of thing in a project into a list of **items**. Each i
 yes/no **features**. Deviant then counts the features, finds the patterns and reports the
 rare exceptions. The detector only collects facts. It never does the counting.
 
-A detector is one file in `skills/deviant/scripts/detectors/`. The file name is its name.
+A detector is one file in `skills/deviant/scripts/deviant_scan/detectors/`. The file name is its name.
 
 ```python
 def extract(repo_root: str) -> list[dict]: ...

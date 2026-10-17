@@ -1,8 +1,8 @@
 import sys
 from pathlib import Path
 
-import github_actions as gha
 import pytest
+from deviant_scan.detectors import github_actions as gha
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "github_actions"
 

@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from mine import run
+from deviant_scan.mine import run
 
 ROOT = Path(__file__).resolve().parent.parent
 

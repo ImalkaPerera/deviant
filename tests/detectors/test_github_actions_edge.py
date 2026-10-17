@@ -2,8 +2,8 @@
 
 import os
 
-import github_actions as gha
 import pytest
+from deviant_scan.detectors import github_actions as gha
 
 
 def write(root, relative, content, binary=False):

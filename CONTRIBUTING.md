@@ -32,7 +32,7 @@ Deviant does the counting. You only collect facts. The full contract is in
 [DETECTOR-SPEC.md](skills/deviant/references/DETECTOR-SPEC.md).
 
 Here is a complete one. It checks whether each Dockerfile ends up running as a non-root user.
-Save it as `skills/deviant/scripts/detectors/dockerfiles.py` and it is picked up
+Save it as `skills/deviant/scripts/deviant_scan/detectors/dockerfiles.py` and it is picked up
 automatically.
 
 ```python

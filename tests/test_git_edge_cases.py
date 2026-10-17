@@ -4,9 +4,9 @@ import os
 import subprocess
 from pathlib import Path
 
-import git_forensics as gf
 import pytest
-from mine import _format_text, mine
+from deviant_scan import git_forensics as gf
+from deviant_scan.mine import _format_text, mine
 
 ANN = ("Ann", "ann@example.com")
 

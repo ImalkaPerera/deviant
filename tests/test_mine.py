@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from mine import group_items, load_detectors, mine, run
+from deviant_scan.mine import group_items, load_detectors, mine, run
 
 
 def make_items(

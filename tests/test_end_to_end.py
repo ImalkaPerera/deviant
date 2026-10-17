@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from mine import DETECTORS_DIR, run
+from deviant_scan.mine import DETECTORS_DIR, run
 
 
 def write_routes_repo(root: Path, total: int, missing_auth: int) -> None:

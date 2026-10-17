@@ -4,7 +4,7 @@ import sys
 import textwrap
 
 import pytest
-import python_routes as pr
+from deviant_scan.detectors import python_routes as pr
 
 
 def project(tmp_path, files):

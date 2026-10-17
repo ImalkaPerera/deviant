@@ -2,13 +2,15 @@
 name = "deviant-scan"
 version = "0.0.1"
 description = "Finds bugs where code breaks the project's own patterns."
-readme = "README.md"
+readme = "README-pypi.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["PyYAML>=6"]
 keywords = ["static-analysis", "bug-detection", "code-quality", "fastapi", "github-actions", "claude-code", "ai-agents"]
 classifiers = [
   "Development Status :: 3 - Alpha",
+  "Environment :: Console",
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Quality Assurance",
   "Programming Language :: Python :: 3",
@@ -23,21 +25,27 @@ classifiers = [
 Homepage = "https://github.com/ImalkaPerera/deviant"
 Documentation = "https://github.com/ImalkaPerera/deviant/tree/main/docs"
 Issues = "https://github.com/ImalkaPerera/deviant/issues"
+Source = "https://github.com/ImalkaPerera/deviant"
+
+[project.scripts]
+deviant-scan = "deviant_scan.mine:main"
 
 [project.optional-dependencies]
-yaml = ["PyYAML>=6"]
-dev = ["pytest>=8", "PyYAML>=6", "ruff==0.17.1"]
+dev = ["pytest>=8", "ruff==0.17.1"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
+# The code lives inside the skill folder so that the Claude Code skill stays self-contained.
+# The same package is what gets published to PyPI.
 [tool.setuptools]
-packages = []  # Phase 1 adds the real package; this stops auto-discovery
+package-dir = {"" = "skills/deviant/scripts"}
+packages = ["deviant_scan", "deviant_scan.detectors"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["skills/deviant/scripts", "skills/deviant/scripts/detectors"]
+pythonpath = ["skills/deviant/scripts"]
 
 [tool.ruff]
 line-length = 100

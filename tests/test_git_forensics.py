@@ -3,8 +3,8 @@ import re
 import subprocess
 from pathlib import Path
 
-import git_forensics as gf
 import pytest
+from deviant_scan import git_forensics as gf
 
 ANN = ("Ann Example", "ann@example.com")
 BOB = ("Bob Example", "bob@example.com")
@@ -120,7 +120,7 @@ def test_each_file_is_blamed_once_per_scan(repo, monkeypatch):
 
 
 def test_mine_attaches_git_evidence_to_each_exception(repo):
-    from mine import mine
+    from deviant_scan.mine import mine
 
     items = [
         {
@@ -142,7 +142,7 @@ def test_mine_attaches_git_evidence_to_each_exception(repo):
 
 
 def test_text_output_shows_git_evidence(repo):
-    from mine import _format_text, mine
+    from deviant_scan.mine import _format_text, mine
 
     items = [
         {
@@ -209,7 +209,7 @@ def test_git_calls_disable_fsmonitor_so_a_hostile_repo_config_cannot_run_program
 
 
 def test_no_git_calls_are_made_when_there_are_no_rules(repo, monkeypatch):
-    from mine import mine
+    from deviant_scan.mine import mine
 
     calls = []
     monkeypatch.setattr(gf, "_git", lambda *a, **k: calls.append(a) or None)

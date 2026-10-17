@@ -3,8 +3,8 @@
 import random
 from pathlib import Path
 
-import github_actions as gha
-import python_routes as pr
+from deviant_scan.detectors import github_actions as gha
+from deviant_scan.detectors import python_routes as pr
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 SEED = 20261017
@@ -70,7 +70,7 @@ def test_damaged_workflows_never_crash_the_actions_detector(tmp_path):
 
 
 def test_every_item_a_detector_returns_is_valid_even_for_damaged_input(tmp_path, capsys):
-    from mine import validate_items
+    from deviant_scan.mine import validate_items
 
     sources = sorted((FIXTURES / "python_routes").rglob("*.py"))
     for number, source in enumerate(sources):

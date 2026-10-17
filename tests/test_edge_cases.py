@@ -1,14 +1,15 @@
 """Edge cases for the mining step, the CLI and the statistics."""
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 
-import mine as mine_module
 import pytest
-from mine import collect_items, main, mine, parse_rule_id, run, validate_items
-from stats import passes_filter, wilson_lower_bound
+from deviant_scan import mine as mine_module
+from deviant_scan.mine import collect_items, main, mine, parse_rule_id, run, validate_items
+from deviant_scan.stats import passes_filter, wilson_lower_bound
 
 SCRIPT = Path(__file__).resolve().parent.parent / "skills" / "deviant" / "scripts" / "mine.py"
 
@@ -246,3 +247,53 @@ def test_the_size_floor_is_inclusive():
 @pytest.mark.parametrize(("s", "n"), [(0, 1), (1, 1), (0, 100), (100, 100), (1, 2)])
 def test_extreme_counts_do_not_raise(s, n):
     assert 0.0 <= wilson_lower_bound(s, n) <= 1.0
+
+
+# --- the installed command ---------------------------------------------------------------
+
+
+def run_script(*args):
+    return subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True)
+
+
+def test_a_plain_path_works_like_repo(tmp_path):
+    result = run_script(str(tmp_path))
+    assert result.returncode == 0
+    assert "no rules found" in result.stdout
+
+
+def test_the_path_and_repo_cannot_disagree(tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()
+    result = run_script(str(tmp_path), "--repo", str(other))
+    assert result.returncode == 2
+    assert "once" in result.stderr
+
+
+def test_the_same_folder_given_twice_is_fine(tmp_path):
+    assert run_script(str(tmp_path), "--repo", str(tmp_path)).returncode == 0
+
+
+def test_no_path_scans_the_current_folder(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)], capture_output=True, text=True, cwd=tmp_path
+    )
+    assert result.returncode == 0
+    assert "no rules found" in result.stdout
+
+
+def test_version_flag_prints_the_name_and_a_version():
+    result = run_script("--version")
+    assert result.returncode == 0
+    assert re.fullmatch(r"deviant-scan \S+", result.stdout.strip())
+
+
+def test_python_m_deviant_scan_runs_the_same_command(tmp_path):
+    result = subprocess.run(
+        [sys.executable, "-m", "deviant_scan", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        cwd=SCRIPT.parent,  # the package sits next to the launcher
+    )
+    assert result.returncode == 0
+    assert "no rules found" in result.stdout

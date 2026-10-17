@@ -70,7 +70,7 @@ Deviant is early, so install from source. You need Python 3.10 or newer and git.
 ```bash
 git clone https://github.com/ImalkaPerera/deviant.git
 cd deviant
-pip install -e ".[yaml]"
+pip install -e .
 
 python skills/deviant/scripts/mine.py --repo /path/to/your/project --with-git
 ```
@@ -155,7 +155,7 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 Deviant is early, and early contributors shape what it becomes. A check is one Python file. If
 you know a framework well enough to say "every X should have a Y", you can add it.
 
-- **Add a check.** Copy the [short template](skills/deviant/scripts/detectors/_template.py). The
+- **Add a check.** Copy the [short template](skills/deviant/scripts/deviant_scan/detectors/_template.py). The
   [contributor guide](CONTRIBUTING.md) has a complete example and [starter ideas](CONTRIBUTING.md#where-to-help).
 - **Report a false alarm.** If Deviant flags something that is fine,
   [open an issue](https://github.com/ImalkaPerera/deviant/issues/new/choose). These reports improve

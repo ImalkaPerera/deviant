@@ -1,5 +1,5 @@
 import pytest
-from stats import passes_filter, wilson_lower_bound
+from deviant_scan.stats import passes_filter, wilson_lower_bound
 
 
 # Values from plan section 6.4, checked against the formula.
