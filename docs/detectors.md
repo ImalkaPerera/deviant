@@ -28,7 +28,8 @@ Auth often comes from above the route, so the detector follows every level FastA
 - dependency lists and single dependencies kept in variables: `AUTH = [Depends(...)]`
 - the route decorator: `@router.post(..., dependencies=[Depends(...)])`, and routes added
   with `@router.api_route(...)` or `router.add_api_route(...)`
-- the router: `APIRouter(dependencies=[...])`, including subclasses of `APIRouter`
+- the router: `APIRouter(dependencies=[...])`, including subclasses of `APIRouter` and a
+  router stored on `self` inside a class
 - every `include_router(..., dependencies=[...])` call, through nested routers
 - the app: `FastAPI(dependencies=[...])`
 
