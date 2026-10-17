@@ -320,3 +320,31 @@ def test_the_real_gap_is_still_reported_next_to_all_of_these(tmp_path):
     )
     assert result["GET /orders"] is False
     assert [k for k, v in result.items() if not v] == ["GET /orders"]
+
+
+# --- auth done by a helper the route calls ----------------------------------------------
+
+
+def test_a_route_that_calls_a_helper_which_checks_credentials_is_guarded(tmp_path):
+    result = has(
+        tmp_path,
+        """
+        def _account_for(request):
+            if request.headers.get("x") != "ok":
+                raise HTTPException(status_code=401)
+            return 1
+
+        def _lookup(request):
+            return 1
+
+        @router.post("/a")
+        def a(request):
+            account = _account_for(request)
+
+        @router.post("/b")
+        def b(request):
+            account = _lookup(request)
+        """,
+        "has_auth",
+    )
+    assert result == {"POST /a": True, "POST /b": False}

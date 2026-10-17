@@ -356,6 +356,8 @@ class _Symbols:
         self.functions: dict[tuple, ast.FunctionDef | ast.AsyncFunctionDef] = {}
         self.routers: dict[tuple, dict] = {}
         self._build()
+        # Functions that check credentials in their own body, so a route that calls one is guarded.
+        self.auth_helpers = {fn.name for fn in self.functions.values() if _body_does_auth(fn)}
 
     def _build(self):
         for rel, info in self.found.items():
@@ -556,7 +558,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                 items.append(
                     _item(
                         rel, method, path, node.lineno, names, types, dec, rate_decorator,
-                        context, extra_auth, node, lines,
+                        context, extra_auth, node, lines, symbols.auth_helpers,
                     )
                 )  # fmt: skip
     for scope, call in info.api_route_calls:
@@ -591,6 +593,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     extra_auth,
                     function,
                     lines,
+                    symbols.auth_helpers,
                 )  # fmt: skip
             )
     return items
@@ -598,13 +601,13 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
 
 def _item(
     rel, method, path, line, names, types, call, rate_decorator, context, extra_auth,
-    function=None, lines=(),
+    function=None, lines=(), helpers=frozenset(),
 ):  # fmt: skip
     features = {
         "is_mutating": method in MUTATING,
         "has_auth": any(_is_auth(n, extra_auth) for n in names)
         or any(_matches_auth_type(t) for t in types)
-        or _auth_outside_dependencies(function, path, lines),
+        or _auth_outside_dependencies(function, path, lines, helpers),
         "has_response_model": _has_response_model(call, function),
         "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),
     }
@@ -682,7 +685,7 @@ def _is_204(node) -> bool:
     return "204" in (_dotted(node) or "")
 
 
-def _auth_outside_dependencies(function, path, lines) -> bool:
+def _auth_outside_dependencies(function, path, lines, helpers=frozenset()) -> bool:
     """Auth that is written in the route, announced by its docs, or unneeded by its path."""
     if _public_path(path):
         return True
@@ -691,7 +694,7 @@ def _auth_outside_dependencies(function, path, lines) -> bool:
     return (
         _declared_public(function, lines)
         or _credential_params(function)
-        or _body_does_auth(function)
+        or _body_does_auth(function, helpers)
     )
 
 
@@ -740,7 +743,7 @@ def _credential_params(function) -> bool:
     return False
 
 
-def _body_does_auth(function) -> bool:
+def _body_does_auth(function, helpers=frozenset()) -> bool:
     """The route checks credentials itself: raises 401/403, calls a verifier, compares a secret."""
     for node in ast.walk(function):
         if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
@@ -749,7 +752,7 @@ def _body_does_auth(function) -> bool:
         elif isinstance(node, ast.Call):
             name = _dotted(node.func) or ""
             last = name.split(".")[-1]
-            if last == "compare_digest" or name.endswith("jwt.decode"):
+            if last == "compare_digest" or name.endswith("jwt.decode") or last in helpers:
                 return True
             if _normalise(last).split("_")[0] in _CALL_PREFIXES:
                 return True
