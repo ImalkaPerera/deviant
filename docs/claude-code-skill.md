@@ -33,8 +33,10 @@ the scan when the skill is installed this way.
 
 1. **Scans** with `mine.py --with-git --json`, and passes on any warning that affects trust:
    files that could not be parsed, a shallow clone, a missing PyYAML.
-2. **Stops** if no group is big enough to show a pattern. It does not look for patterns by
-   reading files itself.
+2. **Scans again with relaxed limits** if nothing was reported (a group of 8 items and a
+   confidence of 0.5, instead of 20 and 0.80), and calls anything it finds a weak lead, which
+   it labels BUG only when the code shows the missing check matters. If that scan is empty too,
+   it stops. It does not look for patterns by reading files itself.
 3. **Judges** up to ten exceptions per run, strongest rule first. For each it reads the code,
    a compliant example, the git evidence, and searches the tests.
 4. **Reports** a table with BUG rows first, then UNSURE, then INTENTIONAL, and says what was
@@ -51,15 +53,17 @@ The guidance for weighing the evidence is in
   report says so and carries on. A real run on a project with such a comment gave the right
   answer and flagged the attempt.
 - **Only the scanner is pre-approved.** The skill allows one exact command, running its own
-  `mine.py`, plus the read-only Read, Grep and Glob tools. Anything else needs your approval as
+  `mine.py` (the default form and the relaxed form), plus the read-only Read, Grep and Glob
+  tools. Anything else needs your approval as
   usual.
 - **Security findings stay private.** If a BUG looks like a vulnerability in a project you do
   not own, the skill tells you to report it to that project privately, not in a public issue.
 
 ## Cost
 
-The scan is free and local. The judging uses model tokens. On small test projects a run cost
-about 15 to 30 cents. Larger projects with more exceptions cost more.
+The scan is free and local. The judging uses model tokens, so the cost depends on the model.
+On small test projects a run cost about 15 to 30 cents, and a run with a small model on a
+single exception cost about a cent. Larger projects with more exceptions cost more.
 
 ## How it was checked
 

@@ -387,10 +387,22 @@ def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=F
     if as_json:
         print(json.dumps({"version": 1, "rules": rules}, indent=2))
     elif not rules:
+        needed = next(
+            (
+                n
+                for n in range(max(min_items, 2), 2000)
+                if passes_filter(n - 1, n, 1, min_confidence)
+            ),
+            None,
+        )
+        reach = (
+            f"one exception needs about {needed} at {min_confidence:.2f} confidence."
+            if needed
+            else f"no group size gives {min_confidence:.2f} confidence with an exception."
+        )
         print(
             "no rules found. Groups may be too small: a group needs at least "
-            f"{min_items} similar items, and one exception needs about 25 "
-            "at the default 0.80 confidence."
+            f"{min_items} similar items, and {reach}"
         )
     else:
         print(_format_text(rules, color=color))

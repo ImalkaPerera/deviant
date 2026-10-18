@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 MODEL = "claude-haiku-5-5"
-PLUGIN_DIR = "e:/deviant"
+PLUGIN_DIR = str(Path(__file__).resolve().parent.parent.parent)
 ALONE = (
     "A scan of this repository flagged the route {route} in {file}. Every other route in its "
     "folder has an auth dependency (57 of 58 do) and this one does not. Decide whether it is a "

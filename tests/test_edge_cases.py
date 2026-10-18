@@ -297,3 +297,20 @@ def test_python_m_deviant_scan_runs_the_same_command(tmp_path):
     )
     assert result.returncode == 0
     assert "no rules found" in result.stdout
+
+
+def test_the_no_rules_hint_uses_the_limits_that_were_given(tmp_path, capsys):
+    from deviant_scan.mine import run
+
+    run(tmp_path, mine_detectors_dir(), 20, 0.80, False)
+    assert "about 25 at 0.80 confidence" in capsys.readouterr().out
+    run(tmp_path, mine_detectors_dir(), 8, 0.50, False)
+    assert "at least 8 similar items" in capsys.readouterr().out
+    run(tmp_path, mine_detectors_dir(), 8, 1.0, False)
+    assert "no group size gives 1.00 confidence" in capsys.readouterr().out
+
+
+def mine_detectors_dir():
+    from deviant_scan.mine import DETECTORS_DIR
+
+    return DETECTORS_DIR

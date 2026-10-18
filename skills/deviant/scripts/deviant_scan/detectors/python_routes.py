@@ -691,7 +691,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     lines,
                     symbols.auth_helpers,
                     span=[call.lineno, call.end_lineno or call.lineno],
-                )  # fmt: skip
+                )
             )
     return items
 

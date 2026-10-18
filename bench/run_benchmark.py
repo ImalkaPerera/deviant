@@ -28,7 +28,7 @@ COUNTING = (
     "GitHub Actions jobs and steps) and counts how many follow each pattern. Run it and use its "
     "output in your answer."
 )
-PLUGIN_DIR = Path("e:/deviant")
+PLUGIN_DIR = Path(__file__).resolve().parent.parent
 CONDITIONS = {
     "A": {"prompt": AUDIT, "tools": "Read,Grep,Glob", "extra": []},
     "B": {
