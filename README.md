@@ -117,7 +117,7 @@ that are protected from above are not reported. See [detectors](docs/detectors.m
 | | Linters and Semgrep | Asking an AI to review the code | **Deviant** |
 |---|---|---|---|
 | Needs rules written first | Yes, or uses rules someone else wrote | No | **No**, it learns from your code |
-| Notices "47 do this, one doesn't" | Only if a rule describes it | Can miss it when it only shows up across hundreds of files | **Yes**, it counts |
+| Notices "47 do this, one doesn't" | Only if a rule describes it | Often, but it varies from run to run | **Yes**, it counts, once a group has enough items |
 | Same answer every run | Yes | Not guaranteed | **Yes** |
 | Cost per scan | Free | Tokens | **Free**, and local |
 | Why it flagged something | A rule message | An explanation in prose | **Numbers and git history** |
@@ -135,8 +135,10 @@ We publish what Deviant got wrong, not only what it got right.
   regression test. The early version flagged all 23 routes of the FastAPI template as unprotected.
 - **The Claude Code skill was run in real sessions** on a real bug, an intentional exception and
   a prompt-injection attempt, and handled all three. That is three scenarios, not a benchmark.
-- **No confirmed bug in someone else's project yet,** and no accuracy number yet. A published
-  benchmark is on the roadmap.
+- **No confirmed bug in someone else's project yet,** and no accuracy number yet.
+- **A first benchmark is published, and it is not flattering.** On bugs planted in ten real
+  repos, Claude reading the code alone found 56%, and the scan alone found few. See
+  [the results](bench/results/).
 
 The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 
@@ -147,7 +149,7 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 - [x] A Claude Code skill that judges each finding: bug, intentional or unsure
 - [ ] Saved rules, and a hook that warns an AI agent the moment it breaks one
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
-- [ ] A published benchmark against asking Claude alone
+- [ ] A benchmark that shows Deviant beating asking Claude alone (a first one is in `bench/results/`)
 - [x] A PyPI release
 
 ## Contribute
