@@ -59,6 +59,23 @@ AUTH_WORDS = {
     "current_user",
     "api_key",
     "apikey",
+    "http_basic",
+    "http_digest",
+    "o_auth2",
+    "open_id_connect",
+}
+# Classes in fastapi.security. A dependency built from one is auth, whatever its variable is called.
+SECURITY_CLASSES = {
+    "HTTPBasic",
+    "HTTPBearer",
+    "HTTPDigest",
+    "OAuth2",
+    "OAuth2PasswordBearer",
+    "OAuth2AuthorizationCodeBearer",
+    "APIKeyHeader",
+    "APIKeyQuery",
+    "APIKeyCookie",
+    "OpenIdConnect",
 }
 # Type names that mark an auth subject, as in `subject: AuthSubject[User]`. Stricter than
 # AUTH_WORDS on purpose: a type called TokenCreate is a request body, not auth.
@@ -96,6 +113,8 @@ SKIP_DIRS = {
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
+    "tests",
+    "test",
 }
 
 
@@ -521,6 +540,8 @@ class _Symbols:
                 # dependencies=[UserInterfaceAuthDependency("job:edit")] or
                 # Annotated[User, CurrentUserDependency()].
                 names.append(_dotted(node.func))
+            elif isinstance(node, ast.Call) and _last_name(node.func) in SECURITY_CLASSES:
+                names.append(_last_name(node.func))
             elif isinstance(node, (ast.Name, ast.Attribute)):
                 key = self.find(node, rel, (), self.consts)
                 if key is not None and key not in seen:
@@ -709,7 +730,8 @@ def _item(
 _PUBLIC_SEGMENTS = {
     "login", "logout", "register", "signup", "sign_in", "signin", "sign_up", "signout",
     "sign_out", "session", "token", "refresh", "callback", "health", "healthz", "ping",
-    "docs", "redoc", "openapi.json",
+    "docs", "redoc", "openapi.json", "forgot_password", "reset_password", "request_verify_token",
+    "verify", "authorize",
 }  # fmt: skip
 _CALL_PREFIXES = {"require", "verify", "authenticate", "authorize", "authorise"}
 _CREDENTIAL_PARAMS = {

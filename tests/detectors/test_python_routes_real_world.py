@@ -479,3 +479,85 @@ def test_a_route_handler_named_like_the_manager_method_it_calls_still_counts_as_
         },
     )
     assert result == {"POST /reset-password": True}
+
+
+def test_a_fastapi_security_scheme_counts_as_auth_whatever_the_variable_is_called(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "a.py": """
+            from fastapi import Depends, FastAPI
+            from fastapi.security import HTTPBasic, HTTPBearer
+
+            app = FastAPI()
+            security = HTTPBasic()
+
+            @app.get("/basic")
+            def basic(credentials=Depends(security)): ...
+
+            @app.get("/bearer")
+            def bearer(credentials=Depends(HTTPBearer())): ...
+
+            @app.get("/open")
+            def open_route(): ...
+            """
+        },
+    )
+    assert result == {"GET /basic": True, "GET /bearer": True, "GET /open": False}
+
+
+def test_account_recovery_and_oauth_routes_are_public_by_nature(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "a.py": """
+            from fastapi import APIRouter
+            router = APIRouter()
+
+            @router.post("/forgot-password")
+            def forgot(): ...
+
+            @router.post("/reset-password")
+            def reset(): ...
+
+            @router.post("/request-verify-token")
+            def request_verify(): ...
+
+            @router.get("/authorize")
+            def authorize(): ...
+
+            @router.get("/orders")
+            def orders(): ...
+            """
+        },
+    )
+    assert result == {
+        "POST /forgot-password": True,
+        "POST /reset-password": True,
+        "POST /request-verify-token": True,
+        "GET /authorize": True,
+        "GET /orders": False,
+    }
+
+
+def test_routes_inside_a_tests_folder_are_not_scanned(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "tests/test_app.py": """
+            from fastapi import FastAPI
+            app = FastAPI()
+
+            @app.delete("/users/me")
+            def delete_me(): ...
+            """,
+            "app/main.py": """
+            from fastapi import FastAPI
+            app = FastAPI()
+
+            @app.get("/real")
+            def real(): ...
+            """,
+        },
+    )
+    assert result == {"GET /real": False}

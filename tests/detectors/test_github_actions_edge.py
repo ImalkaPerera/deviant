@@ -291,3 +291,47 @@ def test_a_job_named_like_an_earlier_nested_key_gets_its_own_line(tmp_path):
     write(tmp_path, ".github/workflows/w.yml", text)
     lines = {i["item_id"]: i["line"] for i in by_group(extract(tmp_path), "gha_jobs")}
     assert lines == {"test": 3, "build": 10}
+
+
+def test_a_job_that_only_gathers_results_needs_no_timeout(tmp_path):
+    text = (
+        "name: w\n"
+        "on: push\n"
+        "jobs:\n"
+        "  test:\n"
+        "    runs-on: x\n"
+        "    timeout-minutes: 10\n"
+        "    steps:\n"
+        "      - run: pytest\n"
+        "  all-green:\n"
+        "    needs: test\n"
+        "    runs-on: x\n"
+        "    steps:\n"
+        "      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35\n"
+        "        with:\n"
+        "          jobs: ${{ toJSON(needs) }}\n"
+        "  build:\n"
+        "    runs-on: x\n"
+        "    steps:\n"
+        "      - run: make\n"
+    )
+    write(tmp_path, ".github/workflows/w.yml", text)
+    timeouts = {
+        i["item_id"]: i["features"]["has_timeout_minutes"]
+        for i in by_group(extract(tmp_path), "gha_jobs")
+    }
+    assert timeouts == {"test": True, "all-green": True, "build": False}
+
+
+def test_a_reusable_workflow_takes_its_permissions_from_the_caller(tmp_path):
+    reusable = (
+        "name: r\non:\n  workflow_call:\njobs:\n  j:\n    runs-on: x\n    steps:\n      - run: ls\n"
+    )
+    plain = "name: p\non: push\njobs:\n  j:\n    runs-on: x\n    steps:\n      - run: ls\n"
+    write(tmp_path, ".github/workflows/r.yml", reusable)
+    write(tmp_path, ".github/workflows/p.yml", plain)
+    scoped = {
+        i["item_id"]: i["features"]["has_permissions_block"]
+        for i in by_group(extract(tmp_path), "gha_workflows")
+    }
+    assert scoped == {".github/workflows/r.yml": True, ".github/workflows/p.yml": False}

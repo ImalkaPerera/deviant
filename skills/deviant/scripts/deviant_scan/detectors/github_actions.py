@@ -134,7 +134,11 @@ def _workflow_item(rel, data, jobs):
         "item_id": rel,
         "file": rel,
         "line": 1,
-        "features": {"has_permissions_block": "permissions" in data or every_job_scoped},
+        "features": {
+            "has_permissions_block": "permissions" in data
+            or every_job_scoped
+            or _only_reusable(data)
+        },
         "context": {"name": str(data.get("name"))},
     }
 
@@ -147,12 +151,40 @@ def _job_item(rel, data, job_id, job, line):
         "file": rel,
         "line": line,
         "features": {
-            "has_timeout_minutes": "timeout-minutes" in job,
+            "has_timeout_minutes": "timeout-minutes" in job or _only_gathers_results(job),
             # Workflow-level concurrency covers every job, like workflow-level permissions.
             "has_concurrency": "concurrency" in job or "concurrency" in data,
         },
         "context": {"runs_on": str(job.get("runs-on"))},
     }
+
+
+def _only_reusable(data) -> bool:
+    """True for a workflow that is only called by others. It runs with the caller's permissions."""
+    events = data.get("on", data.get(True))  # YAML reads a bare `on:` key as True
+    if isinstance(events, dict):
+        return set(events) == {"workflow_call"}
+    if isinstance(events, list):
+        return events == ["workflow_call"]
+    return events == "workflow_call"
+
+
+def _only_gathers_results(job) -> bool:
+    """True for a job whose steps only run alls-green, which exists to gather other jobs' results.
+
+    Such a job finishes at once, so a timeout on it protects nothing.
+    """
+    steps = job.get("steps")
+    return (
+        isinstance(steps, list)
+        and bool(steps)
+        and all(
+            isinstance(s, dict)
+            and isinstance(s.get("uses"), str)
+            and s["uses"].lower().startswith("re-actors/alls-green")
+            for s in steps
+        )
+    )
 
 
 def _step_items(rel, steps, lines, start_line):
