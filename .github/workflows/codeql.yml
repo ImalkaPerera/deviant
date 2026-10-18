@@ -16,6 +16,7 @@ jobs:
     # Code scanning needs a public repo or GitHub Advanced Security
     if: github.event.repository.private == false
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       security-events: write
       contents: read
@@ -24,4 +25,8 @@ jobs:
       - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: python
+          # The fixtures include a file with a deliberate syntax error, to test the scanner.
+          config: |
+            paths-ignore:
+              - tests/fixtures
       - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
