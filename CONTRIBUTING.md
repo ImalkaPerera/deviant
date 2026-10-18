@@ -133,6 +133,10 @@ so nobody duplicates it.
   `feat: add Dockerfile detector`, `fix: handle empty workflow files`, `docs: ...`.
 - If your change affects what Deviant reports, say what it did on a real project before
   and after.
+- CI also runs CodeQL, zizmor, actionlint, pip-audit and gitleaks (see
+  `.github/workflows/security.yml`). If one fails on your change, its log says what to fix. A new
+  workflow needs a `timeout-minutes` on every job, `permissions`, actions pinned to a commit, and
+  `persist-credentials: false` on checkout; a test checks this.
 - Deviant is licensed under MIT or Apache-2.0, at your option. By contributing, you agree
   that your contribution is licensed the same way.
 
