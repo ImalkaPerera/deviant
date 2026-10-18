@@ -40,8 +40,15 @@ reported.
 
 A dependency counts as auth when its name contains words such as `auth`, `token`,
 `verify`, `permission`, `admin`, `oauth2`, `jwt`, `bearer` or `current_user`. Whole words
-are matched, so `get_authors` is not auth. You can add your own words; see
+are matched, so `get_authors` is not auth. A dependency built from a class in
+`fastapi.security` (`HTTPBasic`, `HTTPBearer`, `OAuth2PasswordBearer`, `APIKeyHeader` and the
+rest) is auth whatever its variable is called. You can add your own words; see
 [Configuration](configuration.md).
+
+Routes that cannot require a session are not reported: login, register, sign-in, token,
+refresh, callback, health, forgot-password, reset-password, request-verify-token, verify and
+authorize routes, and routes whose docstring or comment says they are public. Folders named
+`tests` or `test` are not scanned.
 
 ### GitHub Actions (`github_actions`)
 
@@ -55,7 +62,10 @@ Reads workflows in `.github/workflows/` and composite actions (`action.yml` file
 | Jobs | `has_concurrency` | Avoids duplicate runs |
 | Workflows | `has_permissions_block` | Least-privilege tokens |
 
-Workflow-level `concurrency` counts for every job. A workflow whose jobs all set their
-own `permissions` counts as having a permissions block. Local actions and workflows
+A job whose only steps run `re-actors/alls-green` needs no timeout, because it finishes at
+once. A workflow that is only called by others (`on: workflow_call`) takes its permissions
+from the caller, so it needs no permissions block. Workflow-level `concurrency` counts for
+every job. A workflow whose jobs all set their own `permissions` counts as having a
+permissions block. Local actions and workflows
 (`./...`) are skipped, and so are references built from expressions
 (`actions/checkout@${{ inputs.ref }}`), which are only known when the workflow runs.
