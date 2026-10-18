@@ -32,8 +32,8 @@
 
 ---
 
-47 of your 48 API routes check who is calling. The 48th doesn't, and it exports every user's
-data. Nobody noticed.
+Picture a project with 48 API routes. 47 of them check who is calling. The 48th doesn't, and it
+exports every user's data. Nobody noticed.
 
 Every codebase runs on unwritten rules: every route checks auth, every CI job has a timeout,
 every action is pinned to a commit. Nobody writes them down, so nobody checks them. Code review
@@ -57,10 +57,10 @@ person wrote all 47 routes that do check auth, so this looks like a slip, not a 
   no rules to write.
 - **Deterministic.** The same code gives the same answer. Finding the exceptions needs no AI, no
   API key and no network.
-- **Evidence, not guesses.** Each finding comes with git history: who changed it, when, why, and
-  how many of the protected items that person wrote.
+- **Evidence, not guesses.** With `--with-git`, each finding comes with git history: who changed
+  it, when, why, and how many of the protected items that person wrote.
 - **Safe to run on code you don't trust.** It reads and parses files and never runs them. Git
-  evidence uses read-only commands.
+  evidence uses read-only commands. Use 0.1.1 or newer; see [SECURITY.md](SECURITY.md).
 - **Extensible.** A check is one Python file.
 - **Tested on real projects,** with the false alarms we found [written down](docs/tested-on-real-projects.md).
 
@@ -83,7 +83,8 @@ To have Claude judge each exception, install the plugin in Claude Code and run i
 ```
 
 It labels each exception as a bug, intentional or unsure, with proof. See
-[using Deviant in Claude Code](docs/claude-code-skill.md).
+[using Deviant in Claude Code](docs/claude-code-skill.md). The plugin runs the Python on your
+path, so run `pip install PyYAML` first if you want it to check GitHub Actions workflows.
 
 Add `--json` for machine-readable output. Output is colored in a terminal and plain when piped
 (`--color never` and the `NO_COLOR` variable turn it off). To work on Deviant itself, see the
@@ -99,8 +100,10 @@ Add `--json` for machine-readable output. Output is colored in a terminal and pl
    each exception as a bug, intentional or unsure, with proof.
 
 A pattern is only reported when the evidence is strong: a group of at least 20 similar items with
-one to three exceptions. Small projects will often show nothing, on purpose. The math is in
-[how it works](docs/how-it-works.md) and the trade-offs are in [limits](docs/limits.md).
+one to three exceptions. Small projects will often show nothing, on purpose. When that finds
+nothing, the Claude Code skill scans again with looser limits (8 items) and calls what it finds a
+weak lead. The math is in [how it works](docs/how-it-works.md) and the trade-offs are in
+[limits](docs/limits.md).
 
 ## What it checks
 
@@ -129,16 +132,23 @@ Deviant does not replace your linter or your reviewers. It finds what only count
 We publish what Deviant got wrong, not only what it got right.
 
 - **547 real projects scanned** (from 577 found on GitHub), and every candidate read by hand.
-- **One candidate at the default settings.** It turned out to be intentional: the project's own
-  test asserts that the route is public.
-- **Eight problems found and fixed** while reading real results and reviewing the code, each with a
-  regression test. The early version flagged all 23 routes of the FastAPI template as unprotected.
+- **On the first seven projects tried, one candidate at the default settings.** It turned out to
+  be intentional: the project's own test asserts that the route is public.
+- **Every problem found in real results has been fixed,** each with a regression test, and the
+  early ones are [listed](docs/tested-on-real-projects.md#what-the-early-versions-got-wrong). The
+  early version flagged all 23 routes of the FastAPI template as unprotected.
+- **A hand-labeled check on 29 real repos.** After fixing the false alarms it found, the looser
+  scan reported 14 items: 5 real gaps (4 of them low-severity CI hygiene), 5 intentional, 3 unsure
+  and 1 style. The default scan found nothing worth fixing. The fixes were made on those same
+  repos, so the numbers are optimistic. See [the results](bench/results/real-exceptions.md).
 - **The Claude Code skill was run in real sessions** on a real bug, an intentional exception and
-  a prompt-injection attempt, and handled all three. That is three scenarios, not a benchmark.
-- **No confirmed bug in someone else's project yet,** and no accuracy number yet.
-- **A first benchmark is published, and it is not flattering.** On bugs planted in ten real
-  repos, Claude reading the code alone found 56%, and the scan alone found few. See
-  [the results](bench/results/).
+  a prompt-injection attempt, and handled all three.
+- **No bug confirmed by a maintainer in someone else's project yet.**
+- **Benchmarks are published, and they are not flattering.** On bugs planted in ten real repos,
+  Claude reading the code alone found 56% and Claude with the Deviant skill found 11% (tuned on
+  that same set). The scan alone found 2 of 9 removed auth checks and 0 of 13 removed timeouts.
+  On 12 constructed cases for judging, the skill and plain Claude both labeled nearly every case
+  correctly, so those cases did not separate them. See [the results](bench/results/).
 
 The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 
@@ -171,7 +181,7 @@ No API key is needed to run any test.
 [How it works](docs/how-it-works.md) · [Claude Code skill](docs/claude-code-skill.md) ·
 [Reading the output](docs/reading-the-output.md) ·
 [Detectors](docs/detectors.md) · [Configuration](docs/configuration.md) ·
-[Limits](docs/limits.md) · [Security](SECURITY.md)
+[Limits](docs/limits.md) · [Benchmarks](bench/results/) · [Security](SECURITY.md)
 
 The idea comes from Engler et al., [*Bugs as Deviant Behavior*](https://www.cs.columbia.edu/~junfeng/09fa-e6998/papers/deviant.pdf)
 (SOSP 2001), which showed that rare exceptions to a common pattern often point to real bugs.
