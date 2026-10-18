@@ -48,10 +48,12 @@ cost $0.25 for the 36 runs and plain Claude $0.21.
 - All commits in a case have one author, so the git signal "the same author wrote the
   protected routes" is present in every case and tells the two kinds apart not at all.
 
-## A flaw this found in the tool
+## A flaw this found in the tool, now fixed
 
-The scan reports a route at its `def` line, and git evidence is taken from the commit that
+The scan reported a route at its `def` line, and git evidence was taken from the commit that
 last changed that line. In FastAPI the auth usually sits in the decorator above it, so when
-the decorator is edited the evidence points at the older commit. One answer noticed this
+the decorator was edited the evidence pointed at the older commit. One answer noticed this
 itself: "The scanner attributed the exception to the initial commit. The actual removal is
-in the latest commit." The evidence should cover the decorator lines too.
+in the latest commit." Detectors can now report a span, and for a route it runs from the
+first decorator to the `def` line. Git evidence uses the newest change in the span. The runs
+above were made before the fix, so they used the older evidence.
