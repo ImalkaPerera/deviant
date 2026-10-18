@@ -141,6 +141,10 @@ We publish what Deviant got wrong, not only what it got right.
   scan reported 14 items: 5 real gaps (4 of them low-severity CI hygiene), 5 intentional, 3 unsure
   and 1 style. The default scan found nothing worth fixing. The fixes were made on those same
   repos, so the numbers are optimistic. See [the results](bench/results/real-exceptions.md).
+- **A second check on 15 repos the detectors had never seen** found no real gap. Six of its 18
+  items were false alarms, all from one project whose auth dependencies have names with no auth
+  word in them. A fix handles that case, and the fix is, again, fitted to those repos. See
+  [the results](bench/results/unseen-repos.md).
 - **The Claude Code skill was run in real sessions** on a real bug, an intentional exception and
   a prompt-injection attempt, and handled all three.
 - **No bug confirmed by a maintainer in someone else's project yet.**

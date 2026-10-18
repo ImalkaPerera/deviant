@@ -1,0 +1,172 @@
+{
+  "selected_on": "2026-10-18",
+  "purpose": "Repos the detectors had never been run on, used to check whether fixes made on the earlier repos hold up. No detector change was made from looking at these before the first scan.",
+  "rule": "Candidates came from a GitHub topic search (topic fastapi, language Python, MIT or Apache-2.0, 40 to 9000 stars, pushed since 2026-03-01, at least 1.2 MB), minus every repo used in bench/repos.json, bench/repos_heldout.json, the earlier local trials, and docs/tested-on-real-projects.md. Taken in order of stars, skipping repos over 150 MB, and kept if a folder had 8 or more route decorators or the repo had 8 or more CI jobs. The first 15 that qualified were used. The rule does not look at what the scan reports.",
+  "repos": [
+    {
+      "name": "pydantic/FastUI",
+      "url": "https://github.com/pydantic/FastUI",
+      "commit": "b5a33bc6e5cdb5175b832568aa778d8589ade4fd",
+      "licence": "MIT",
+      "stars_when_picked": 8930,
+      "counted": {
+        "largest_folder_routes": 27,
+        "ci_jobs": 6
+      }
+    },
+    {
+      "name": "nonebot/nonebot2",
+      "url": "https://github.com/nonebot/nonebot2",
+      "commit": "6e1efbea0e0341b461c5ace5ecc794e302b3eac6",
+      "licence": "MIT",
+      "stars_when_picked": 7750,
+      "counted": {
+        "largest_folder_routes": 0,
+        "ci_jobs": 10
+      }
+    },
+    {
+      "name": "xerrors/Yuxi",
+      "url": "https://github.com/xerrors/Yuxi",
+      "commit": "1d66405280631d30c8dd006703d9f270606d45a1",
+      "licence": "MIT",
+      "stars_when_picked": 7422,
+      "counted": {
+        "largest_folder_routes": 266,
+        "ci_jobs": 14
+      }
+    },
+    {
+      "name": "shy3130/tick-stock-panel",
+      "url": "https://github.com/shy3130/tick-stock-panel",
+      "commit": "b63c17e9ec3f0c25336fbcd56388ec4fa47f46cf",
+      "licence": "MIT",
+      "stars_when_picked": 5945,
+      "counted": {
+        "largest_folder_routes": 323,
+        "ci_jobs": 6
+      }
+    },
+    {
+      "name": "SenteLabsAI/OpenExecutive",
+      "url": "https://github.com/SenteLabsAI/OpenExecutive",
+      "commit": "88bbb78b898fc5adc24d32fd19ec5c40e9616301",
+      "licence": "Apache-2.0",
+      "stars_when_picked": 5619,
+      "counted": {
+        "largest_folder_routes": 307,
+        "ci_jobs": 11
+      }
+    },
+    {
+      "name": "hunvreus/devpush",
+      "url": "https://github.com/hunvreus/devpush",
+      "commit": "d67a99b62b3e2b044f1e0e9b06a3296fe1939fe3",
+      "licence": "MIT",
+      "stars_when_picked": 4767,
+      "counted": {
+        "largest_folder_routes": 30,
+        "ci_jobs": 0
+      }
+    },
+    {
+      "name": "Lightning-AI/LitServe",
+      "url": "https://github.com/Lightning-AI/LitServe",
+      "commit": "68c4943be1eeabd18561ac6704b6043459d6fa40",
+      "licence": "Apache-2.0",
+      "stars_when_picked": 3955,
+      "counted": {
+        "largest_folder_routes": 4,
+        "ci_jobs": 9
+      }
+    },
+    {
+      "name": "Soju06/codex-lb",
+      "url": "https://github.com/Soju06/codex-lb",
+      "commit": "72630bbfeee9e3b0d9acfb95e2b1e706b8b0188e",
+      "licence": "MIT",
+      "stars_when_picked": 3346,
+      "counted": {
+        "largest_folder_routes": 42,
+        "ci_jobs": 43
+      }
+    },
+    {
+      "name": "the-momentum/open-wearables",
+      "url": "https://github.com/the-momentum/open-wearables",
+      "commit": "d18304f8076a7710c48a4b279f8e8abd5a16887e",
+      "licence": "MIT",
+      "stars_when_picked": 2667,
+      "counted": {
+        "largest_folder_routes": 131,
+        "ci_jobs": 17
+      }
+    },
+    {
+      "name": "widgetti/solara",
+      "url": "https://github.com/widgetti/solara",
+      "commit": "26b3258461f3f512f2110b13c8e430ceaf426e67",
+      "licence": "MIT",
+      "stars_when_picked": 2182,
+      "counted": {
+        "largest_folder_routes": 0,
+        "ci_jobs": 15
+      }
+    },
+    {
+      "name": "TNT-Likely/PanWatch",
+      "url": "https://github.com/TNT-Likely/PanWatch",
+      "commit": "59a6aad521354c8297df3e9536e2281e17444ee5",
+      "licence": "MIT",
+      "stars_when_picked": 2134,
+      "counted": {
+        "largest_folder_routes": 52,
+        "ci_jobs": 12
+      }
+    },
+    {
+      "name": "benavlabs/FastAPI-boilerplate",
+      "url": "https://github.com/benavlabs/FastAPI-boilerplate",
+      "commit": "4deb9c45f4298d4a84f005126f6ee8ccd823acf8",
+      "licence": "MIT",
+      "stars_when_picked": 2095,
+      "counted": {
+        "largest_folder_routes": 11,
+        "ci_jobs": 5
+      }
+    },
+    {
+      "name": "ormar-orm/ormar",
+      "url": "https://github.com/ormar-orm/ormar",
+      "commit": "67d8106f05463dc709bae544d15833cd42b5cc3b",
+      "licence": "MIT",
+      "stars_when_picked": 1801,
+      "counted": {
+        "largest_folder_routes": 5,
+        "ci_jobs": 9
+      }
+    },
+    {
+      "name": "guillevc/yubal",
+      "url": "https://github.com/guillevc/yubal",
+      "commit": "78d63846712178ded0b5f3c2552a80e952451c3c",
+      "licence": "MIT",
+      "stars_when_picked": 1685,
+      "counted": {
+        "largest_folder_routes": 20,
+        "ci_jobs": 4
+      }
+    },
+    {
+      "name": "uriyyo/fastapi-pagination",
+      "url": "https://github.com/uriyyo/fastapi-pagination",
+      "commit": "be58ee40ea64e5ab7be6beb5d5042f51f6f51376",
+      "licence": "MIT",
+      "stars_when_picked": 1685,
+      "counted": {
+        "largest_folder_routes": 26,
+        "ci_jobs": 4
+      }
+    }
+  ]
+}

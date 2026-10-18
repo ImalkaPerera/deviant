@@ -10,6 +10,7 @@ is that Deviant does not yet beat asking Claude alone at finding bugs.
 | [condition-b-skill.md](condition-b-skill.md) | Claude with the Deviant skill, same planted bugs | 9 of 126 (7%), then 14 of 126 (11%) with a relaxed second scan, tuned on this set |
 | [judging.md](judging.md) | Labeling a flagged route as bug or intentional, on 12 constructed cases | Skill 36 of 36 right, plain Claude 35 of 36. The cases were too easy to separate them |
 | [real-exceptions.md](real-exceptions.md) | Every exception the scan reports on 29 real repos, labeled by hand | After fixes: 14 items, 5 real gaps, 5 intentional, 3 unsure, 1 style |
+| [unseen-repos.md](unseen-repos.md) | The same hand-labeling on 15 repos the detectors had never seen | 18 items, 0 real gaps, 6 false alarms from one project (fixed afterwards) |
 | [heldout-baseline.md](heldout-baseline.md) | A second repo set for checking detector changes | Too small to guide changes yet: 3 plantable bugs, none reported |
 
 ## How to read these

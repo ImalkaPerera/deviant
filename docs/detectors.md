@@ -39,8 +39,10 @@ one place gets the dependencies of all of them, so a gap in only one inclusion i
 reported.
 
 A dependency counts as auth when its name contains words such as `auth`, `token`,
-`verify`, `permission`, `admin`, `oauth2`, `jwt`, `bearer` or `current_user`. Whole words
-are matched, so `get_authors` is not auth. A dependency built from a class in
+`verify`, `permission`, `admin`, `oauth2`, `jwt`, `bearer` or `current_user`, or a pair such as
+`validate` with `session` or `identity`. Whole words are matched, so `get_authors` is not auth,
+and a plain `validate_pagination` is not either. A name with none of these words is missed, and
+you can add your own. A dependency built from a class in
 `fastapi.security` (`HTTPBasic`, `HTTPBearer`, `OAuth2PasswordBearer`, `APIKeyHeader` and the
 rest) is auth whatever its variable is called. You can add your own words; see
 [Configuration](configuration.md).
