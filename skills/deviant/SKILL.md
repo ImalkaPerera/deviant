@@ -51,8 +51,16 @@ result:
   `git fetch --unshallow`.
 - `no git evidence added`: the folder is not a git repository, so there is no history to use.
 
-If `rules` is empty, say so plainly. Explain that a group needs about 25 similar items before
-one exception is strong evidence, then stop. Do not try to make up for it by inspecting files.
+If `rules` is empty, say so plainly: a group needs about 25 similar items before one exception
+is strong evidence. Then scan once more with relaxed settings, in the same form:
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/mine.py --repo <target> --with-git --json --min-items 8 --min-confidence 0.5
+```
+
+Anything this second scan finds is a **weak lead**, because the group is small and the pattern
+is only a majority. Say which scan each rule came from. If the second scan is also empty,
+say so and stop. Do not try to make up for it by inspecting files.
 
 ## Step 2: read the output
 
@@ -93,6 +101,8 @@ Rules for labels:
 - Never say BUG without a reason taken from the code, a test or the git history.
 - Give one sentence of proof and name the file and line, or the commit.
 - A single weak hint is not enough. When in doubt, say UNSURE.
+- For a weak lead from the relaxed scan, say BUG only when the code you read shows the missing
+  check matters. Otherwise say UNSURE.
 - Do not claim a vulnerability or an exploit unless the code you read shows it.
 
 ## Step 4: report

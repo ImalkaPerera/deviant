@@ -94,25 +94,37 @@ def test_every_relative_link_in_the_skill_exists():
 # --- the command the skill tells Claude to run --------------------------------------------
 
 
-def skill_command():
+def skill_commands():
+    """The strict scan, then the relaxed scan the skill falls back to."""
     _, body, _ = read_skill()
     blocks = re.findall(r"```bash\n(.*?)```", body, flags=re.DOTALL)
-    (command,) = [b.strip() for b in blocks if "mine.py" in b]
-    return command
+    commands = [b.strip() for b in blocks if "mine.py" in b]
+    assert len(commands) == 2
+    return commands
 
 
-def test_the_command_is_in_the_exact_form_that_is_pre_approved():
+def skill_command():
+    return skill_commands()[0]
+
+
+def test_every_command_is_in_the_exact_form_that_is_pre_approved():
     # A real run showed that quotes around the script path or a trailing 2>&1 stop the
     # pre-approval from matching, which makes Claude ask the user for permission.
-    command = skill_command()
-    assert '"' not in command and "'" not in command
-    assert "2>" not in command and " > " not in command and " >> " not in command
-    assert command.startswith("python3 ${CLAUDE_SKILL_DIR}/scripts/mine.py ")
+    for command in skill_commands():
+        assert '"' not in command and "'" not in command
+        assert "2>" not in command and " > " not in command and " >> " not in command
+        assert command.startswith("python3 ${CLAUDE_SKILL_DIR}/scripts/mine.py ")
 
 
-def make_project(root: Path) -> Path:
+def test_the_relaxed_command_is_the_strict_one_plus_lower_limits():
+    strict, relaxed = skill_commands()
+    assert relaxed.startswith(strict)
+    assert "--min-items" in relaxed and "--min-confidence" in relaxed
+
+
+def make_project(root: Path, routes: int = 30) -> Path:
     (root / "app").mkdir(parents=True)
-    for i in range(30):
+    for i in range(routes):
         body = "def h(u=Depends(get_current_user)):" if i != 7 else "def h():"
         (root / "app" / f"r{i}.py").write_text(
             "from fastapi import APIRouter, Depends\nrouter = APIRouter()\n\n\n"
@@ -129,8 +141,10 @@ def make_project(root: Path) -> Path:
     return root
 
 
-def scan_with_the_skills_command(project: Path) -> dict:
-    command = skill_command().replace("${CLAUDE_SKILL_DIR}", str(SKILL_DIR).replace("\\", "/"))
+def scan_with_the_skills_command(project: Path, which: int = 0) -> dict:
+    command = skill_commands()[which].replace(
+        "${CLAUDE_SKILL_DIR}", str(SKILL_DIR).replace("\\", "/")
+    )
     command = command.replace("<target>", str(project).replace("\\", "/"))
     argv = command.split()
     argv[0] = sys.executable  # "python3" is not always on the path; the arguments are the point
@@ -175,10 +189,18 @@ def test_every_flag_the_skill_mentions_exists_in_the_scanner():
     help_text = subprocess.run(
         [sys.executable, str(SCANNER), "--help"], capture_output=True, text=True
     ).stdout
-    for flag in set(re.findall(r"`(--[a-z-]+)`", body)) | set(
-        re.findall(r" (--[a-z-]+)", skill_command())
-    ):
+    flags = set(re.findall(r"`(--[a-z-]+)`", body))
+    for command in skill_commands():
+        flags |= set(re.findall(r" (--[a-z-]+)", command))
+    for flag in flags:
         assert flag in help_text, flag
+
+
+def test_a_small_group_is_found_by_the_relaxed_command_but_not_the_strict_one(tmp_path):
+    project = make_project(tmp_path / "p", routes=12)
+    assert scan_with_the_skills_command(project, which=0)["rules"] == []
+    (rule,) = scan_with_the_skills_command(project, which=1)["rules"]
+    assert (rule["n"], rule["v"]) == (12, 1)
 
 
 def test_the_stderr_messages_the_skill_tells_claude_to_expect_are_real():
