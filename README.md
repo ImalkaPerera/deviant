@@ -109,7 +109,7 @@ weak lead. The math is in [how it works](docs/how-it-works.md) and the trade-off
 
 | Check | Compares | Finds |
 |---|---|---|
-| **FastAPI routes** | each route with the others in its folder | a route missing the auth, rate limit or response model its neighbours have |
+| **FastAPI routes** | each route with the others in its folder | a route missing the auth or rate limit its neighbours have (a missing response model shows with `--include-style`) |
 | **GitHub Actions** | every workflow and composite action | an action not pinned to a commit, a job with no timeout, a workflow with no permissions block |
 
 FastAPI auth is followed through routers, shared dependencies and `include_router`, so routes

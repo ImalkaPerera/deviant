@@ -32,6 +32,7 @@ With `--json`, each exception carries the same evidence for tools and the judge 
     "item_id": "POST /api/v1/users/export",
     "file": "app/routes/items.py",
     "line": 244,
+    "dependencies": ["get_db"],
     "git": {
       "commit": "52c027b", "author": "dana@example.com", "date": "2026-10-17",
       "subject": "add csv export", "files_in_commit": 1,
@@ -46,6 +47,15 @@ With `--json`, each exception carries the same evidence for tools and the judge 
 `noqa`, `intentional` and `todo` found in the commit message or the comments just above
 the line. `compliant_checked` is a sample of at most 50 compliant items, to keep scans fast, and
 `author_followed_rule_elsewhere` is how many of those the same author wrote.
+
+`dependencies` lists what the route depends on. For a missing-auth exception, a dependency
+that does not look like auth may still be auth under a name the scan does not recognize. In the
+text output the scan says so and tells you to name it in `.deviant/config.json` (see
+[configuration](configuration.md)).
+
+A missing response model is style, not security, and a stream or a file download cannot have
+one, so those findings are hidden by default. The text output counts them, and the JSON has a
+top-level `style_hidden` number. Add `--include-style` to see them.
 
 An exception is a lead, not a verdict. A login or health-check route is supposed to be
 public. Deciding which exceptions are real bugs is the job of the

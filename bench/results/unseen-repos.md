@@ -49,6 +49,21 @@ works on these cases and nothing more. A name-based rule will keep missing auth 
 without a recognized word. Router-level checks and settings the user can add (see
 [configuration](../../docs/configuration.md)) are the way out, and the scan cannot guess them.
 
+## Two more changes: hide style by default, and show the dependencies
+
+The names cannot all be guessed, and style-only items were a third of the output. So:
+
+- A missing response model is now reported only with `--include-style`. The scan counts what it
+  hid. On these repos that hides all 6 style items, leaving 6 items at the relaxed settings
+  (5 intentional, 1 unsure) and 2 at the default settings (both intentional). On the earlier 29
+  repos it hides 1 more, leaving 13 items, 5 of them real.
+- An auth exception now lists the dependencies on that route, leaving out plain plumbing such as
+  `get_db`, with a note to name a dependency in `.deviant/config.json` if it checks who is
+  calling. This turns a false alarm into something a user can fix in one line.
+
+These are counted from the labels above, not remeasured, and the same caveat holds: they were
+chosen after reading these repos.
+
 ## What this adds up to
 
 Across the 44 repos read so far, the default scan has found nothing worth fixing. The only real

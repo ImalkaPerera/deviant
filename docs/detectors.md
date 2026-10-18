@@ -15,7 +15,7 @@ nothing.
 |---|---|
 | `is_mutating` | The route uses POST, PUT, PATCH or DELETE. A route whose methods are given by a variable is reported as `ANY` and is not counted as mutating |
 | `has_auth` | An auth dependency applies to the route |
-| `has_response_model` | The route sets `response_model` |
+| `has_response_model` | The route sets `response_model`. Style only, so it is reported only with `--include-style` |
 | `has_rate_limit` | A rate-limit dependency or decorator applies |
 
 Auth often comes from above the route, so the detector follows every level FastAPI uses:
