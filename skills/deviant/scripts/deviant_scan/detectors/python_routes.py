@@ -18,6 +18,9 @@ from pathlib import Path
 
 DETECTOR = "python_routes"
 PEER_GROUP = "fastapi_routes"
+# Features whose exceptions are reported only with --include-style: a missing response model
+# is untidy, and a stream or a file download cannot have one.
+STYLE_FEATURES = {"has_response_model"}
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 ROUTER_CALLS = {"APIRouter", "FastAPI"}
@@ -724,7 +727,10 @@ def _item(
         # First decorator line to the def line: where a route's auth is written and changed.
         "span": span,
         "features": features,
-        "context": dict(context),
+        "context": {
+            **context,
+            "dependencies": [n for n in sorted(set(names)) if not _is_plumbing(n)],
+        },
     }
 
 
@@ -1037,3 +1043,14 @@ def _matches_auth_type(name: str) -> bool:
 
 def _is_rate(name: str) -> bool:
     return _matches(name, RATE_WORDS)
+
+
+# Words in the names of dependencies that only hand over a database session, settings or a client.
+_PLUMBING_WORDS = {
+    "get", "async", "sync", "db", "database", "session", "sessions", "settings", "config",
+    "logger", "redis", "cache", "context", "engine", "client", "request",
+}  # fmt: skip
+
+
+def _is_plumbing(name: str) -> bool:
+    return set(_normalise(name.split(".")[-1]).split("_")) <= _PLUMBING_WORDS

@@ -69,7 +69,11 @@ say so and stop. Do not try to make up for it by inspecting files.
 - `statement`, `n`, `s`, `v`, `wlb95`: the pattern, how many items it covers, how many follow
   it, how many do not, and a confidence between 0 and 1.
 - `exceptions`: the items that do not follow it, each with `item_id`, `file`, `line` (paths are
-  relative to the target) and a `git` block.
+  relative to the target), a `git` block, and for a route its `dependencies`. For a missing-auth
+  exception, a dependency that does not look like auth may be auth under an unusual name, so read
+  its code before calling the route unprotected.
+- `style_hidden`, at the top level: how many style-only findings (a missing response model) were
+  left out. Say so in the report. `--include-style` would show them.
 - `compliant_examples`: a few items that do follow the pattern, for comparison.
 
 The `git` block holds `commit`, `author`, `date`, `subject`, `files_in_commit`,

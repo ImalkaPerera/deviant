@@ -101,6 +101,12 @@ def _has(item, feature):
     return item["features"].get(feature) is True
 
 
+def _dependencies_of(item):
+    """{"dependencies": [...]} when the detector listed what the item depends on, else {}."""
+    found = (item.get("context") or {}).get("dependencies")
+    return {"dependencies": list(found)} if found else {}
+
+
 def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
     wlb = wilson_lower_bound(s, n)
     if kind == "plain":
@@ -114,6 +120,7 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
             "item_id": m["item_id"],
             "file": m["file"],
             "line": m["line"],
+            **_dependencies_of(m),
             "git": None,
             # Used for git evidence only. Removed before output.
             "_span": m.get("span"),
@@ -141,10 +148,12 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
     }
 
 
-def _candidates(detector, peer, members, min_items, min_confidence):
+def _candidates(detector, peer, members, min_items, min_confidence, hide=frozenset()):
     names = sorted({f for m in members for f in m["features"]})
     conditions = [f for f in names if f.startswith(CONDITION_PREFIX)]
-    requirements = [f for f in names if not f.startswith(CONDITION_PREFIX)]
+    requirements = [
+        f for f in names if not f.startswith(CONDITION_PREFIX) and (detector, f) not in hide
+    ]
     for feature in requirements:
         pool = members
         s = sum(_has(m, feature) for m in pool)
@@ -174,10 +183,12 @@ def mine(
     min_items=DEFAULT_MIN_ITEMS,
     min_confidence=DEFAULT_MIN_CONFIDENCE,
     repo_root=None,
+    hide=frozenset(),
 ):
     """Return reported rules, strongest first.
 
     With repo_root, each exception also gets a "git" block from the history of its line.
+    hide is a set of (detector, feature) pairs that are not reported.
     """
     validate_items(items)
     # The same item reported twice would inflate the group, so keep one of each.
@@ -195,7 +206,7 @@ def mine(
     items = sorted(unique.values(), key=lambda i: (i["file"], i["line"], i["item_id"]))
     best_by_exceptions = {}
     for (detector, peer), members in group_items(items).items():
-        for rule in _candidates(detector, peer, members, min_items, min_confidence):
+        for rule in _candidates(detector, peer, members, min_items, min_confidence, hide):
             # A plain rule and an if-then rule for the same feature with the same exceptions
             # say the same thing; keep the stronger. Different features stay separate, so an
             # item missing both auth and a response model gives two findings.
@@ -246,9 +257,23 @@ def load_detectors(detectors_dir: Path):
     return modules
 
 
+def style_features(modules) -> frozenset:
+    """(detector, feature) pairs the detectors mark as style only, with STYLE_FEATURES."""
+    return frozenset(
+        (module.DETECTOR, feature)
+        for module in modules
+        for feature in getattr(module, "STYLE_FEATURES", ())
+        if hasattr(module, "DETECTOR")
+    )
+
+
 def collect_items(repo_root: Path, detectors_dir: Path):
+    return _collect(load_detectors(detectors_dir), repo_root)
+
+
+def _collect(modules, repo_root: Path):
     items = []
-    for module in load_detectors(detectors_dir):
+    for module in modules:
         name = module.__name__.removeprefix("deviant_detector_")
         try:
             found = module.extract(str(repo_root))
@@ -337,9 +362,17 @@ def _enable_windows_ansi():
         return False
 
 
+AUTH_HINT = (
+    "note: a dependency listed above may check who is calling even though its name does not "
+    'say so. If one does, add its name to .deviant/config.json under "auth_words" and scan again.'
+)
+MAX_DEPENDENCIES_SHOWN = 6
+
+
 def _format_text(rules, color=False):
     c = _Style(color)
     lines = []
+    needs_hint = False
     for r in rules:
         lines.append(
             f"{c.bold(r['rule_id'])}  {c.dim('n=')}{r['n']} {c.dim('s=')}{c.green(r['s'])} "
@@ -349,6 +382,14 @@ def _format_text(rules, color=False):
         for e in r["exceptions"]:
             where = c.red(f"{e['file']}:{e['line']}")
             lines.append(f"  {c.dim('exception:')} {where} ({e['item_id']})")
+            deps = e.get("dependencies")
+            if deps:
+                shown = ", ".join(deps[:MAX_DEPENDENCIES_SHOWN])
+                more = len(deps) - MAX_DEPENDENCIES_SHOWN
+                extra = f" and {more} more" if more > 0 else ""
+                lines.append(f"    {c.dim('dependencies:')} {shown}{extra}")
+                if r["feature"] == "has_auth":
+                    needs_hint = True
             git = e.get("git")
             if git:
                 if git["uncommitted"]:
@@ -370,22 +411,53 @@ def _format_text(rules, color=False):
                     )
                 if git["intent_words"]:
                     lines.append(f"    {c.dim('intent words:')} {', '.join(git['intent_words'])}")
+    if needs_hint:
+        lines.append("")
+        lines.append(c.dim(AUTH_HINT))
     return "\n".join(lines)
 
 
-def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=False, color=False):
+def _hidden_note(count):
+    plural = count != 1
+    return (
+        f"{count} style-only finding{'s' if plural else ''} hidden (a missing response model). "
+        f"Add --include-style to show {'them' if plural else 'it'}."
+    )
+
+
+def run(
+    repo_root,
+    detectors_dir,
+    min_items,
+    min_confidence,
+    as_json,
+    with_git=False,
+    color=False,
+    include_style=False,
+):
     if not Path(repo_root).is_dir():
         print(f"error: {repo_root} is not a directory", file=sys.stderr)
         return 2
-    items = collect_items(Path(repo_root), Path(detectors_dir))
+    modules = load_detectors(Path(detectors_dir))
+    items = _collect(modules, Path(repo_root))
+    hide = frozenset() if include_style else style_features(modules)
     rules = mine(
         items,
         min_items=min_items,
         min_confidence=min_confidence,
         repo_root=Path(repo_root) if with_git else None,
+        hide=hide,
     )
+    hidden = 0
+    if hide:
+        everything = mine(items, min_items=min_items, min_confidence=min_confidence)
+        hidden = sum(
+            len(r["exceptions"])
+            for r in everything
+            if (r["rule_id"].split(".", 1)[0], r["feature"]) in hide
+        )
     if as_json:
-        print(json.dumps({"version": 1, "rules": rules}, indent=2))
+        print(json.dumps({"version": 1, "rules": rules, "style_hidden": hidden}, indent=2))
     elif not rules:
         needed = next(
             (
@@ -406,6 +478,8 @@ def run(repo_root, detectors_dir, min_items, min_confidence, as_json, with_git=F
         )
     else:
         print(_format_text(rules, color=color))
+    if hidden and not as_json:
+        print(("\n" if rules else "") + _hidden_note(hidden))
     return 0
 
 
@@ -458,6 +532,11 @@ def main(argv=None):
     parser.add_argument(
         "--with-git", action="store_true", help="add the git history of each exception"
     )
+    parser.add_argument(
+        "--include-style",
+        action="store_true",
+        help="also report style-only findings, such as a route with no response model",
+    )
     args = parser.parse_args(argv)
     if args.path and args.repo and args.path != args.repo:
         parser.error("give the folder once: as a path or with --repo, not both")
@@ -478,6 +557,7 @@ def main(argv=None):
             args.min_confidence,
             args.json,
             with_git=args.with_git,
+            include_style=args.include_style,
             color=color,
         )
     except BrokenPipeError:
