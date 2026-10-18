@@ -31,6 +31,7 @@ def extract(repo_root: str) -> list[dict]: ...
 | `item_id` | A non-empty string. |
 | `file` | A non-empty string, relative to `repo_root`. |
 | `line` | An integer, 1 or more. |
+| `span` | Optional. `[first line, last line]`, both 1 or more and first not after last. The lines where the item is written, when that is more than `line`. A route's decorators and its `def` line, for example. Git evidence uses the newest change in the span. |
 | `features` | A dict of name to `True` or `False`. Nothing else (not `1`, not `None`). |
 | `context` | Optional. Anything JSON can hold. |
 

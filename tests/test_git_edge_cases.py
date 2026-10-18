@@ -272,3 +272,24 @@ def test_an_inherited_git_dir_does_not_redirect_evidence_to_another_repository(
     monkeypatch.setenv("GIT_DIR", str(other / ".git"))
     info = gf.GitEvidence(scanned).line_author("a.py", 1)
     assert info is not None and info["email"] == ANN[1]
+
+
+def test_evidence_for_a_span_uses_the_newest_commit_in_it(tmp_path):
+    root = make_repo(tmp_path)
+    (root / "a.py").write_text("@router.get('/a', dependencies=[Auth])\ndef a():\n    return 1\n")
+    commit_all(root, "add route")
+    (root / "a.py").write_text("@router.get('/a')\ndef a():\n    return 1\n")
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "tidy decorator", author=("Bob", "bob@example.com"))
+    evidence = gf.GitEvidence(root)
+    assert evidence.line_author("a.py", 2)["email"] == ANN[1]
+    assert evidence.line_author("a.py", 2, span=(1, 2))["email"] == "bob@example.com"
+
+
+def test_an_uncommitted_line_in_a_span_wins(tmp_path):
+    root = make_repo(tmp_path)
+    (root / "a.py").write_text("@router.get('/a', dependencies=[Auth])\ndef a():\n    return 1\n")
+    commit_all(root)
+    (root / "a.py").write_text("@router.get('/a')\ndef a():\n    return 1\n")
+    info = gf.GitEvidence(root).line_author("a.py", 2, span=(1, 2))
+    assert info["commit"] is None

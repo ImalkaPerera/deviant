@@ -886,3 +886,28 @@ def test_routes_in_statements_nested_in_blocks_are_found(tmp_path):
         f"GET /{name}" for name in ("debug", "prod", "try", "except", "finally", "with", "for")
     )
     assert all(i["features"]["has_auth"] for i in items)
+
+
+def test_a_route_reports_the_span_from_its_first_decorator_to_its_def(tmp_path):
+    items = pr.extract(
+        str(
+            project(
+                tmp_path,
+                {
+                    "a.py": """
+                    from fastapi import APIRouter
+                    router = APIRouter()
+
+                    @router.get(
+                        '/a',
+                        summary='x',
+                    )
+                    async def a():
+                        return 1
+                    """
+                },
+            )
+        )
+    )
+    (item,) = items
+    assert item["span"] == [5, 9] and item["line"] == 9

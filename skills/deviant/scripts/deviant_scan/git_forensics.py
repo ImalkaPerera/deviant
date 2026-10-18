@@ -87,17 +87,32 @@ class GitEvidence:
         self._blame: dict[str, dict[int, dict]] = {}
         self._commits: dict[str, dict] = {}
 
-    def line_author(self, rel: str, line: int) -> dict | None:
-        """The commit that last changed this line, or None if git cannot say."""
+    def line_author(self, rel: str, line: int, span: tuple[int, int] | None = None) -> dict | None:
+        """The commit that last changed this line, or None if git cannot say.
+
+        With a span (first line, last line), the newest change anywhere in it counts. A route
+        keeps its auth in the decorator above the def line, so the def line alone can point at
+        an older commit than the one that removed the auth.
+        """
         if not self.available:
             return None
-        return self._blame_file(rel).get(line)
+        blame = self._blame_file(rel)
+        if not span:
+            return blame.get(line)
+        found = [blame[n] for n in range(span[0], span[1] + 1) if n in blame]
+        if not found:
+            return None
+        # An uncommitted line is newer than any commit.
+        return max(found, key=lambda info: (info["commit"] is None, info["time"]))
 
     def exception_evidence(
-        self, rel: str, line: int, compliant: list[tuple[str, int]]
+        self, rel: str, line: int, compliant: list[tuple], span: tuple[int, int] | None = None
     ) -> dict | None:
-        """The git block from plan section 7.2 for one exception."""
-        info = self.line_author(rel, line)
+        """The git block from plan section 7.2 for one exception.
+
+        Each compliant item is (file, line) or (file, line, span).
+        """
+        info = self.line_author(rel, line, span)
         if info is None:
             return None
         commit = self._commit(info["commit"]) if info["commit"] else None
@@ -107,8 +122,8 @@ class GitEvidence:
         followed = (
             sum(
                 1
-                for c_file, c_line in sample
-                if (self.line_author(c_file, c_line) or {}).get("email") == author_email
+                for c_file, c_line, *c_span in sample
+                if (self.line_author(c_file, c_line, *c_span) or {}).get("email") == author_email
             )
             if author_email
             else 0
@@ -185,6 +200,7 @@ def _parse_blame(output: str, boundary: set[str] = frozenset()) -> dict[int, dic
                 "boundary": sha in boundary,
                 "email": "",
                 "date": None,
+                "time": 0,
                 "subject": "",
             }
             result[int(match.group(2))] = current
@@ -194,6 +210,7 @@ def _parse_blame(output: str, boundary: set[str] = frozenset()) -> dict[int, dic
             current["email"] = raw[len("author-mail ") :].strip().strip("<>")
         elif raw.startswith("author-time "):
             stamp = int(raw.split()[1])
+            current["time"] = stamp
             current["date"] = datetime.fromtimestamp(stamp, timezone.utc).date().isoformat()
         elif raw.startswith("summary "):
             current["subject"] = raw[len("summary ") :]

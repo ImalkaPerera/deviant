@@ -70,6 +70,14 @@ def validate_items(items):
         line = item["line"]
         if isinstance(line, bool) or not isinstance(line, int) or line < 1:
             raise ValueError(f"line must be an integer of at least 1: {label!r}")
+        span = item.get("span")
+        if span is not None and not (
+            isinstance(span, (list, tuple))
+            and len(span) == 2
+            and all(isinstance(n, int) and not isinstance(n, bool) for n in span)
+            and 1 <= span[0] <= span[1]
+        ):
+            raise ValueError(f"span must be [first line, last line], first <= last: {label!r}")
         features = item["features"]
         if not isinstance(features, dict):
             raise ValueError(f"features must be a dict: {label!r}")
@@ -102,7 +110,14 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
         rule_id = f"{detector}.{peer}.{cond}_implies_{feature}"
         statement = f"When {cond}, {feature} is also true"
     exceptions = [
-        {"item_id": m["item_id"], "file": m["file"], "line": m["line"], "git": None}
+        {
+            "item_id": m["item_id"],
+            "file": m["file"],
+            "line": m["line"],
+            "git": None,
+            # Used for git evidence only. Removed before output.
+            "_span": m.get("span"),
+        }
         for m in pool
         if not _has(m, feature)
     ]
@@ -122,7 +137,7 @@ def _make_rule(detector, peer, kind, cond, feature, pool, s, n):
         "exceptions": exceptions,
         "compliant_examples": examples,
         # Every compliant location, for git evidence. Removed before output.
-        "_compliant": [(m["file"], m["line"]) for m in pool if _has(m, feature)],
+        "_compliant": [(m["file"], m["line"], m.get("span")) for m in pool if _has(m, feature)],
     }
 
 
@@ -204,9 +219,10 @@ def mine(
         evidence = None
     for rule in rules:
         for exception in rule["exceptions"]:
+            span = exception.pop("_span")
             if evidence is not None:
                 exception["git"] = evidence.exception_evidence(
-                    exception["file"], exception["line"], rule["_compliant"]
+                    exception["file"], exception["line"], rule["_compliant"], span
                 )
         del rule["_compliant"]
     return rules

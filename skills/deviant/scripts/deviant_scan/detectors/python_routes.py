@@ -632,6 +632,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     _item(
                         rel, method, path, node.lineno, names, types, dec, rate_decorator,
                         context, extra_auth, node, lines, symbols.auth_helpers,
+                        span=[min(d.lineno for d in node.decorator_list), node.lineno],
                     )
                 )  # fmt: skip
     for scope, call in info.api_route_calls:
@@ -668,6 +669,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     function,
                     lines,
                     symbols.auth_helpers,
+                    span=[call.lineno, call.end_lineno or call.lineno],
                 )  # fmt: skip
             )
     return items
@@ -675,7 +677,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
 
 def _item(
     rel, method, path, line, names, types, call, rate_decorator, context, extra_auth,
-    function=None, lines=(), helpers=frozenset(),
+    function=None, lines=(), helpers=frozenset(), span=None,
 ):  # fmt: skip
     features = {
         "is_mutating": method in MUTATING,
@@ -693,6 +695,8 @@ def _item(
         "item_id": f"{method} {path}",
         "file": rel,
         "line": line,
+        # First decorator line to the def line: where a route's auth is written and changed.
+        "span": span,
         "features": features,
         "context": dict(context),
     }
