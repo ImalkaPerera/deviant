@@ -19,8 +19,11 @@ you do not trust:
 
 - Detectors read files and parse them. They never import or run the project's code.
 - YAML is read with `safe_load`. Files over 1 MB and symbolic links are skipped.
-- Git evidence runs read-only git commands with `core.fsmonitor` switched off, because a
-  crafted `.git/config` can otherwise make git run a program of the attacker's choosing.
+- Git evidence runs read-only git commands. A crafted `.git/config` can make git run a program
+  of the attacker's choosing, so `core.fsmonitor` is switched off and `git blame` runs with
+  `--no-textconv`. Variables such as `GIT_DIR` that point git at another repository are
+  ignored. Versions before 0.1.1 did not disable textconv, so use 0.1.1 or newer when
+  scanning code you do not trust with `--with-git`.
 - Files that cannot be parsed are skipped, and the scan carries on.
 
 ## If Deviant helps you find a vulnerability in someone else's project
