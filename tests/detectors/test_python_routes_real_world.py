@@ -561,3 +561,29 @@ def test_routes_inside_a_tests_folder_are_not_scanned(tmp_path):
         },
     )
     assert result == {"GET /real": False}
+
+
+def test_a_validate_session_or_identity_dependency_is_auth_but_a_plain_validator_is_not(tmp_path):
+    result = auth_in_project(
+        tmp_path,
+        {
+            "a.py": """
+            from fastapi import APIRouter, Depends
+
+            guard = [Depends(validate_dashboard_session)]
+            router = APIRouter(prefix="/api/accounts", dependencies=guard)
+
+            @router.get("/list")
+            def listing(): ...
+
+            open_router = APIRouter()
+
+            @open_router.get("/usage")
+            def usage(api_key=Depends(validate_provider_usage_identity)): ...
+
+            @open_router.get("/page")
+            def page(p=Depends(validate_pagination)): ...
+            """
+        },
+    )
+    assert result == {"GET /list": True, "GET /usage": True, "GET /page": False}

@@ -93,7 +93,12 @@ AUTH_TYPE_WORDS = {
     "authorization",
 }
 # Words that make a name auth when they appear together, as in get_current_active_user.
-AUTH_WORD_PAIRS = {("current", "user"), ("web", "user")}
+AUTH_WORD_PAIRS = {
+    ("current", "user"),
+    ("web", "user"),
+    ("validate", "session"),
+    ("validate", "identity"),
+}
 # "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
 RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
 MAX_BYTES = 1_000_000
