@@ -179,11 +179,7 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()
             try:
-                if (
-                    path.is_symlink()
-                    or not _inside(path, root)
-                    or path.stat().st_size > MAX_BYTES
-                ):
+                if path.is_symlink() or not _inside(path, root) or path.stat().st_size > MAX_BYTES:
                     continue
                 source = path.read_bytes()
             except OSError:

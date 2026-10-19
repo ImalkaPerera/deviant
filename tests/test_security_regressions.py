@@ -50,9 +50,7 @@ def test_blame_does_not_run_the_clean_filter_of_the_scanned_repo(tmp_path):
     marker = tmp_path / "filter-ran.txt"
     helper = tmp_path / "clean.py"
     helper.write_text(
-        "import sys\n"
-        f"open(r'{marker}', 'w').write('ran')\n"
-        "sys.stdout.write(sys.stdin.read())\n",
+        f"import sys\nopen(r'{marker}', 'w').write('ran')\nsys.stdout.write(sys.stdin.read())\n",
         encoding="utf-8",
     )
     git(root, "config", "filter.evil.clean", f'"{sys.executable}" "{helper}"')
