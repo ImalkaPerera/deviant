@@ -27,6 +27,8 @@ INTENT_WORDS = (
     "todo",
 )
 UNCOMMITTED = "0" * 40
+# The object id of git's empty tree. Used as an attribute source, it names no filters.
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 COMMENT_LOOKBACK = 3
 _SHA = re.compile(r"^([0-9a-f]{40}) \d+ (\d+)")
 _warned_timeouts: set[str] = set()
@@ -47,11 +49,25 @@ _REPOSITORY_ENV = (
 def _git(repo: str, args: list[str]) -> str | None:
     """Run git in repo and return stdout, or None if it failed for any reason."""
     env = {k: v for k, v in os.environ.items() if k not in _REPOSITORY_ENV}
+    # Attributes come from an empty tree, so git applies no filter named by the repository's
+    # .gitattributes. Blame would otherwise run a clean filter from .git/config, which is
+    # code from the scanned repository. GIT_ATTR_SOURCE needs git 2.40 or newer.
+    env["GIT_ATTR_SOURCE"] = _EMPTY_TREE
     try:
         result = subprocess.run(
             # The scanned repository is untrusted input. A crafted .git/config can name a
-            # program for git to run (core.fsmonitor), so switch that off for every call.
-            ["git", "-c", "core.fsmonitor=false", "-C", repo, *args],
+            # program for git to run (core.fsmonitor), and a crafted config or signed commit
+            # can name a program for log to run (gpg.program), so switch both off.
+            [
+                "git",
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "log.showSignature=false",
+                "-C",
+                repo,
+                *args,
+            ],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -83,6 +99,12 @@ class GitEvidence:
         # Inside a .git folder git prints "false" and still exits 0, so read the answer.
         inside = _git(self.repo, ["rev-parse", "--is-inside-work-tree"])
         self.available = inside is not None and inside.strip() == "true"
+        self._attr_source_ok = self.available and _attr_source_supported()
+        if self.available and not self._attr_source_ok:
+            print(
+                "warning: git 2.40 or newer is needed for blame evidence, so it is skipped",
+                file=sys.stderr,
+            )
         self._boundary = _shallow_boundary(self.repo) if self.available else set()
         self._blame: dict[str, dict[int, dict]] = {}
         self._commits: dict[str, dict] = {}
@@ -147,7 +169,9 @@ class GitEvidence:
 
     def _blame_file(self, rel: str) -> dict[int, dict]:
         if rel not in self._blame:
-            output = _git(self.repo, ["blame", "--line-porcelain", "--no-textconv", "--", rel])
+            output = None
+            if self._attr_source_ok:
+                output = _git(self.repo, ["blame", "--line-porcelain", "--no-textconv", "--", rel])
             self._blame[rel] = _parse_blame(output, self._boundary) if output else {}
         return self._blame[rel]
 
@@ -173,6 +197,24 @@ class GitEvidence:
         return "\n".join(
             text.strip() for text in window if text.strip().startswith(("#", "//", "/*"))
         )
+
+
+def _attr_source_supported() -> bool:
+    """True if this git reads attributes from GIT_ATTR_SOURCE (git 2.40 or newer).
+
+    Without it the empty-tree guard in _git does nothing, so blame must not run at all.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    match = re.search(r"(\d+)\.(\d+)", out)
+    return bool(match) and (int(match.group(1)), int(match.group(2))) >= (2, 40)
 
 
 def _shallow_boundary(repo: str) -> set[str]:

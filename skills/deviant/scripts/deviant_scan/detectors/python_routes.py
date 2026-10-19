@@ -138,11 +138,19 @@ def extract(repo_root: str) -> list[dict]:
     return items
 
 
+def _inside(path: Path, root: Path) -> bool:
+    """True if path, with links and junctions followed, is still inside root (root is resolved)."""
+    try:
+        return path.resolve().is_relative_to(root)
+    except (OSError, RuntimeError):
+        return False
+
+
 def _extra_auth_words(root: Path) -> set[str]:
     """Words the user adds in .deviant/config.json under "auth_words"."""
     path = root / ".deviant" / "config.json"
     try:
-        if path.is_symlink() or path.stat().st_size > MAX_BYTES:
+        if path.is_symlink() or not _inside(path, root) or path.stat().st_size > MAX_BYTES:
             return set()
         config = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -160,14 +168,22 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
     sources = {}
     failed = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+        # os.walk follows Windows junctions, which is_symlink() does not report, so a
+        # folder that leads outside the repository is dropped here.
+        dirnames[:] = sorted(
+            d for d in dirnames if d not in SKIP_DIRS and _inside(Path(dirpath) / d, root)
+        )
         for name in sorted(filenames):
             if not name.endswith(".py"):
                 continue
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()
             try:
-                if path.is_symlink() or path.stat().st_size > MAX_BYTES:
+                if (
+                    path.is_symlink()
+                    or not _inside(path, root)
+                    or path.stat().st_size > MAX_BYTES
+                ):
                     continue
                 source = path.read_bytes()
             except OSError:

@@ -50,15 +50,35 @@ def _load(yaml, path: Path):
         # utf-8-sig drops a byte order mark, which editors on Windows often add.
         text = path.read_text(encoding="utf-8-sig")
         data = yaml.safe_load(text)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError, MemoryError):
+    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError, RecursionError, MemoryError):
+        # ValueError: PyYAML raises it for dates that do not exist, such as 2021-02-30.
         return None  # one unreadable or hostile file must not stop the rest
     return (text, data) if isinstance(data, dict) else None
 
 
-def _usable(path: Path) -> bool:
-    """A regular file of a sensible size. Symlinks could point outside the repository."""
+def _inside(path: Path, root: Path) -> bool:
+    """True if path, with links and junctions followed, is still inside root.
+
+    Windows junctions are not symlinks, so is_symlink() does not catch them.
+    """
     try:
-        return path.is_file() and not path.is_symlink() and path.stat().st_size <= MAX_BYTES
+        return path.resolve().is_relative_to(root)
+    except (OSError, RuntimeError):
+        return False
+
+
+def _usable(path: Path, root: Path) -> bool:
+    """A regular file of a sensible size, inside the repository.
+
+    Symlinks and junctions could point outside the repository, so they are skipped.
+    """
+    try:
+        return (
+            path.is_file()
+            and not path.is_symlink()
+            and _inside(path, root)
+            and path.stat().st_size <= MAX_BYTES
+        )
     except OSError:
         return False
 
@@ -69,21 +89,25 @@ def _workflow_files(root: Path) -> list[Path]:
         entries = sorted(folder.iterdir())
     except OSError:
         return []
-    return [p for p in entries if p.suffix in YAML_SUFFIXES and _usable(p)]
+    return [p for p in entries if p.suffix in YAML_SUFFIXES and _usable(p, root)]
 
 
 def _action_files(root: Path) -> list[Path]:
     """action.yml files: the repository's own, and those in .github/actions."""
     found = [root / f"action{suffix}" for suffix in YAML_SUFFIXES]
     base = root / ".github" / "actions"
-    if base.is_dir() and not base.is_symlink():
+    if base.is_dir() and not base.is_symlink() and _inside(base, root):
         for dirpath, dirnames, filenames in os.walk(base):
             depth = len(Path(dirpath).relative_to(base).parts)
-            dirnames[:] = sorted(dirnames) if depth < MAX_ACTION_DEPTH else []
+            dirnames[:] = (
+                sorted(d for d in dirnames if _inside(Path(dirpath) / d, root))
+                if depth < MAX_ACTION_DEPTH
+                else []
+            )
             found.extend(
                 Path(dirpath) / name for name in sorted(filenames) if name in _ACTION_NAMES
             )
-    return [p for p in found if _usable(p)]
+    return [p for p in found if _usable(p, root)]
 
 
 _ACTION_NAMES = {f"action{suffix}" for suffix in YAML_SUFFIXES}
@@ -139,7 +163,7 @@ def _workflow_item(rel, data, jobs):
             or every_job_scoped
             or _only_reusable(data)
         },
-        "context": {"name": str(data.get("name"))},
+        "context": {"name": _short_text(data.get("name"))},
     }
 
 
@@ -155,7 +179,7 @@ def _job_item(rel, data, job_id, job, line):
             # Workflow-level concurrency covers every job, like workflow-level permissions.
             "has_concurrency": "concurrency" in job or "concurrency" in data,
         },
-        "context": {"runs_on": str(job.get("runs-on"))},
+        "context": {"runs_on": _short_text(job.get("runs-on"))},
     }
 
 
@@ -213,8 +237,35 @@ def _uses_item(rel, uses, line, name):
         "file": rel,
         "line": line,
         "features": {"pinned_to_sha": bool(SHA_RE.match(ref))},
-        "context": {"step_name": None if name is None else str(name)},
+        "context": {"step_name": None if name is None else _short_text(name)},
     }
+
+
+_SHOWN_CHARS = 200
+_NODE_BUDGET = 500
+
+
+def _short_text(value) -> str:
+    """str() of a parsed YAML value, with a size limit.
+
+    YAML aliases make one object appear in many places, so a value can expand to an
+    exponential number of nodes. str() would walk all of them, so this stops after a fixed
+    number of nodes and shortens the text.
+    """
+    budget = [_NODE_BUDGET]
+
+    def walk(node, nested: bool) -> str:
+        if budget[0] <= 0:
+            return "..."
+        budget[0] -= 1
+        if isinstance(node, dict):
+            inner = ", ".join(f"{walk(k, True)}: {walk(v, True)}" for k, v in node.items())
+            return "{" + inner + "}"
+        if isinstance(node, list):
+            return "[" + ", ".join(walk(v, True) for v in node) + "]"
+        return repr(node) if nested else str(node)
+
+    return walk(value, False)[:_SHOWN_CHARS]
 
 
 def _judgeable(uses: str) -> bool:
