@@ -21,7 +21,19 @@ PEER_GROUP = "fastapi_routes"
 # Features whose exceptions are reported only with --include-style: a missing response model
 # is untidy, and a stream or a file download cannot have one.
 STYLE_FEATURES = {"has_response_model"}
-ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+ROUTE_METHODS = {
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "head",
+    "options",
+    "trace",
+    "websocket",
+}  # fmt: skip
+# Starlette and FastAPI calls that register an endpoint without a decorator.
+REGISTER_CALLS = {"add_api_route", "add_route", "add_websocket_route"}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 ROUTER_CALLS = {"APIRouter", "FastAPI"}
 DEPENDENCY_CALLS = {"Depends", "Security"}
@@ -198,6 +210,13 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
                 sources[rel] = source.decode("utf-8", errors="replace").splitlines()
             elif not _looks_like_template(source):
                 failed.append(rel)
+            elif b"APIRouter" in source or b"FastAPI" in source:
+                # Plain Jinja templates are expected here and stay quiet. A broken file that
+                # defines routes is different: its routes are missed, so say so.
+                print(
+                    f"python_routes: {rel} defines routes but could not be parsed and was skipped",
+                    file=sys.stderr,
+                )
     if failed:
         # A skipped file can hide the auth helpers other files import, so say so.
         version = ".".join(map(str, sys.version_info[:2]))
@@ -290,6 +309,8 @@ class _Found:
         self.imports: list[ast.Import | ast.ImportFrom] = []
         self.include_calls: list[tuple[tuple, ast.Call]] = []
         self.api_route_calls: list[tuple[tuple, ast.Call]] = []
+        # `router.get("/x")(handler)`: the decorator is applied to a call, not written above a def.
+        self.call_routes: list[tuple[tuple, ast.Call]] = []
         # `self.router = APIRouter()` inside a class: (class id, "self.router", value).
         self.attr_assigned: list[tuple[int, str, ast.expr]] = []
         # The class a function or call sits in, by id of the node, for `self.` lookups.
@@ -355,10 +376,18 @@ def _collect(tree: ast.Module) -> _Found:
             call = node.value
             if isinstance(call, ast.Await):
                 call = call.value
-            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
-                if call.func.attr == "include_router" and call.args:
+            if (
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Call)
+                and _route_decorator(call.func) is not None
+            ):
+                found.call_routes.append((scope, call))
+                if owner is not None:
+                    found.enclosing_class[id(call)] = owner
+            elif isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
+                if call.func.attr == "include_router" and (call.args or _keyword(call, "router")):
                     found.include_calls.append((scope, call))
-                elif call.func.attr == "add_api_route":
+                elif call.func.attr in REGISTER_CALLS:
                     found.api_route_calls.append((scope, call))
                 if owner is not None:
                     found.enclosing_class[id(call)] = owner
@@ -477,7 +506,8 @@ class _Symbols:
         for rel, info in self.found.items():
             for scope, call in info.include_calls:
                 owner = info.enclosing_class.get(id(call))
-                child = self.find(call.args[0], rel, scope, self.routers, owner)
+                child_expr = call.args[0] if call.args else _keyword(call, "router")
+                child = self.find(child_expr, rel, scope, self.routers, owner)
                 if child is None:
                     continue
                 parent = self.find(call.func.value, rel, scope, self.routers, owner)
@@ -561,6 +591,10 @@ class _Symbols:
                 name = _dotted(target) if target is not None else None
                 if name:
                     names.append(name)
+                    # An alias such as `from app.deps import get_user as gu` also names get_user.
+                    imported = self.imports[rel].get(name)
+                    if imported and imported["from"]:
+                        names.append(imported["from"][1])
             elif isinstance(node, ast.Call) and _normalise(_last_name(node.func)).endswith(
                 "_dependency"
             ):
@@ -704,13 +738,19 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
         if function is not None:
             more_names, types = _function_dependencies(function, rel, symbols)
             names += more_names
+        elif isinstance(endpoint, ast.Lambda):
+            names += _lambda_dependencies(endpoint, rel, symbols)
         path = _string(call.args[0] if call.args else _keyword(call, "path"))
         context = {
             "function_name": function.name if function is not None else _dotted(endpoint),
             "decorators": [],
             "comments_near": [],
         }
-        for method in _methods(_keyword(call, "methods"), default=["GET"]):
+        if call.func.attr == "add_websocket_route":
+            methods = ["WEBSOCKET"]
+        else:
+            methods = _methods(_keyword(call, "methods"), default=["GET"])
+        for method in methods:
             items.append(
                 _item(
                     rel,
@@ -729,7 +769,55 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     span=[call.lineno, call.end_lineno or call.lineno],
                 )
             )
+    # `router.get("/x")(handler)`: the same route as a decorator, applied to a call.
+    for scope, call in info.call_routes:
+        router, methods, path = _route_decorator(call.func)
+        owner = info.enclosing_class.get(id(call))
+        key = symbols.find(router, rel, scope, symbols.routers, owner)
+        if key is None or not call.args:
+            continue
+        endpoint = call.args[0]
+        function = _function_named(endpoint, rel, scope, symbols)
+        names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(call.func, rel)
+        types: list[str] = []
+        if function is not None:
+            more_names, types = _function_dependencies(function, rel, symbols)
+            names += more_names
+        elif isinstance(endpoint, ast.Lambda):
+            names += _lambda_dependencies(endpoint, rel, symbols)
+        context = {
+            "function_name": function.name if function is not None else _dotted(endpoint),
+            "decorators": [],
+            "comments_near": [],
+        }
+        for method in methods:
+            items.append(
+                _item(
+                    rel,
+                    method,
+                    path,
+                    call.lineno,
+                    names,
+                    types,
+                    call.func,
+                    False,
+                    context,
+                    extra_auth,
+                    function,
+                    lines,
+                    symbols.auth_helpers,
+                    span=[call.lineno, call.end_lineno or call.lineno],
+                )
+            )
     return items
+
+
+def _lambda_dependencies(node, rel, symbols):
+    """Dependencies in a lambda endpoint's defaults, as in lambda user=Depends(get_user): ..."""
+    names: list[str] = []
+    for default in node.args.defaults + [d for d in node.args.kw_defaults if d is not None]:
+        names += symbols.depends_names(default, rel)
+    return names
 
 
 def _item(
@@ -928,6 +1016,21 @@ def _function_dependencies(node, rel, symbols):
     types: list[str] = []
     for default in node.args.defaults + [d for d in node.args.kw_defaults if d]:
         names += symbols.depends_names(default, rel)
+    # A bare Depends() takes its dependency from the annotation, as in `user: get_user = Depends()`.
+    positional = node.args.posonlyargs + node.args.args
+    tail = positional[len(positional) - len(node.args.defaults) :]
+    pairs = list(zip(tail, node.args.defaults, strict=True))
+    pairs += [
+        (a, d)
+        for a, d in zip(node.args.kwonlyargs, node.args.kw_defaults, strict=True)
+        if d is not None
+    ]
+    for arg, default in pairs:
+        if arg.annotation is None or not _is_bare_depends(default, rel, symbols):
+            continue
+        dotted = _dotted(_annotation(arg.annotation))
+        if dotted:
+            names.append(dotted)
     for arg in _all_args(node.args):
         if arg.annotation is None:
             continue
@@ -936,6 +1039,16 @@ def _function_dependencies(node, rel, symbols):
         names += symbols.depends_names(annotation, rel) + alias_deps
         types += alias_types + _type_names(annotation)
     return names, types
+
+
+def _is_bare_depends(default, rel, symbols) -> bool:
+    """True for Depends() or Security() with no argument."""
+    return (
+        isinstance(default, ast.Call)
+        and not default.args
+        and not default.keywords
+        and _last_name(default.func) in symbols.dependency_calls[rel]
+    )
 
 
 def _annotation(expr):
