@@ -31,17 +31,21 @@ the scan when the skill is installed this way.
 
 ## What it does
 
-1. **Scans** with `mine.py --with-git --json`, and passes on any warning that affects trust:
-   files that could not be parsed, a shallow clone, a missing PyYAML.
+1. **Scans** with `mine.py --with-git --json --inventory`, and passes on any warning that
+   affects trust: files that could not be parsed, a shallow clone, a missing PyYAML.
 2. **Scans again with relaxed limits** if nothing was reported (a group of 8 items and a
    confidence of 0.5, instead of 20 and 0.80), and calls anything it finds a weak lead, which
-   it labels BUG only when the code shows the missing check matters. If that scan is empty too,
-   it stops. It does not look for patterns by reading files itself.
-3. **Judges** up to ten exceptions per run, strongest rule first. For each it reads the code,
-   a compliant example, the git evidence, and searches the tests.
-4. **Reports** a table with BUG rows first, then UNSURE, then INTENTIONAL, and says what was
-   not covered.
-5. **Asks** before changing anything. It never edits files unless you ask.
+   it labels BUG only when the code shows the missing check matters.
+3. **Reads the inventory.** The inventory lists every peer group and the items that lack
+   something most of their peers have, with no size floor or confidence bound. An empty scan
+   does not end the run: the skill judges these leads too. It does not hunt for patterns of its
+   own, but it does read a lead and the nearest peers the inventory names.
+4. **Judges** up to 25 exceptions or leads per run: rules first, then relaxed rules, then
+   inventory leads. For each it reads the code, a compliant example, the git evidence, and
+   searches the tests.
+5. **Reports** a table with BUG rows first, then UNSURE, then INTENTIONAL, and says where each
+   came from (rule, relaxed scan or inventory lead) and what was not covered.
+6. **Asks** before changing anything. It never edits files unless you ask.
 
 The guidance for weighing the evidence is in
 [`skills/deviant/references/judging.md`](../skills/deviant/references/judging.md).

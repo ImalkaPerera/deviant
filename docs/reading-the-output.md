@@ -57,6 +57,14 @@ A missing response model is style, not security, and a stream or a file download
 one, so those findings are hidden by default. The text output counts them, and the JSON has a
 top-level `style_hidden` number. Add `--include-style` to see them.
 
+With `--inventory`, the output also lists every peer group and its **leads**: for each feature
+that at least 60% of a group has, the items that lack it (at most 8 per feature, in groups of
+4 or more). The JSON has an `inventory` object with `groups`, `candidates` and `truncated`. A
+candidate gives the group size `n`, how many `have` and `lack` the feature, the `share` that
+have it, the `items` that lack it, and the nearest `examples` that have it. A lead has passed no
+size floor and no confidence bound, so it is a place to look, not a finding. The output holds at
+most 60 items, and `truncated` counts the rest.
+
 An exception is a lead, not a verdict. A login or health-check route is supposed to be
 public. Deciding which exceptions are real bugs is the job of the
 [Claude Code skill](claude-code-skill.md), or yours.

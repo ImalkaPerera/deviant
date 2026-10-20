@@ -54,6 +54,21 @@ secrets.
 
 **GitHub Actions (`has_concurrency`).** Mostly a convenience. It matters for deployment jobs.
 
+## Inventory leads from small groups
+
+A lead from the inventory comes from a group that may have only 4 or 5 items, so the pattern
+itself is thin. Weigh it differently from a rule:
+
+- **Read the nearest peers first.** The lead's `examples` are the siblings to compare with. If
+  they protect themselves in a way that does not apply here (a different kind of route, a job
+  that finishes in seconds), say INTENTIONAL or UNSURE.
+- **A peer that differs for a reason is not a peer.** A health check among authenticated
+  routes, or a release job among test jobs, is a different kind of item, not a deviation.
+- **Count the lack.** A group where 3 of 5 items lack a feature is a coin flip, not a rule.
+  The lead only means something when the code shows the missing check matters.
+- **Say it came from a lead.** In the report, mark the source as `inventory`, so the reader
+  knows the group was small.
+
 ## Writing the proof
 
 One sentence. Name the file and line, or the commit. Say what you saw.

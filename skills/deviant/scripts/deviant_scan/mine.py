@@ -189,19 +189,8 @@ def _sort_key(rule):
     return (-exact, -rule["n"], rule["v"], rule["kind"] != "plain", rule["rule_id"])
 
 
-def mine(
-    items,
-    min_items=DEFAULT_MIN_ITEMS,
-    min_confidence=DEFAULT_MIN_CONFIDENCE,
-    repo_root=None,
-    hide=frozenset(),
-):
-    """Return reported rules, strongest first.
-
-    With repo_root, each exception also gets a "git" block from the history of its line.
-    hide is a set of (detector, feature) pairs that are not reported.
-    """
-    validate_items(items)
+def _unique_items(items):
+    """One of each item, in an order that does not depend on how detectors returned them."""
     # Sort by everything, features included, before keeping one of each. Then a duplicate
     # with conflicting features is resolved the same way whatever order detectors return.
     ordered = sorted(
@@ -226,7 +215,110 @@ def mine(
             entry["line"],
         )
         unique.setdefault(key, entry)
-    items = list(unique.values())
+    return list(unique.values())
+
+
+# The inventory lists every peer group, however small, and the items that lack something most
+# of their peers have. It is not a rule: it does not apply the size floor or the confidence
+# bound, so what it lists are leads to read, not findings.
+INVENTORY_MIN_GROUP = 4
+INVENTORY_MIN_SHARE = 0.6
+INVENTORY_MAX_PER_FEATURE = 8
+INVENTORY_LIMIT = 60
+
+
+def _peer_examples(members, feature, lacking, count=2):
+    """Up to `count` items that have the feature, nearest to the item that lacks it.
+
+    The same file comes first, then the closest line, so the example is the sibling a reader
+    would compare the item with.
+    """
+    having = [m for m in members if _has(m, feature)]
+    having.sort(key=lambda m: (m["file"] != lacking["file"], abs(m["line"] - lacking["line"])))
+    return [{"item_id": m["item_id"], "file": m["file"], "line": m["line"]} for m in having[:count]]
+
+
+def inventory(items, hide=frozenset(), limit=INVENTORY_LIMIT):
+    """{"groups": [...], "candidates": [...], "truncated": n}: how every group splits.
+
+    A group is every item of one detector in one peer group. For each feature an item should
+    have, a candidate is the set of items that lack it when at least INVENTORY_MIN_SHARE of
+    the group has it and no more than INVENTORY_MAX_PER_FEATURE items lack it. Candidates are
+    ordered by how large the majority is, then by group size, and at most `limit` items are
+    listed in total, so the output stays small on a large project.
+    """
+    validate_items(items)
+    groups, candidates = [], []
+    for (detector, peer), members in sorted(group_items(_unique_items(items)).items()):
+        n = len(members)
+        names = sorted({f for m in members for f in m["features"]})
+        requirements = [
+            f for f in names if not f.startswith(CONDITION_PREFIX) and (detector, f) not in hide
+        ]
+        split = {}
+        for feature in requirements:
+            have = sum(1 for m in members if _has(m, feature))
+            split[feature] = {"true": have, "false": n - have}
+        groups.append({"detector": detector, "peer_group": peer, "n": n, "features": split})
+        if n < INVENTORY_MIN_GROUP:
+            continue
+        for feature, count in split.items():
+            share = count["true"] / n
+            lacking = count["false"]
+            if share < INVENTORY_MIN_SHARE or not 1 <= lacking <= INVENTORY_MAX_PER_FEATURE:
+                continue
+            lacking_items = [m for m in members if not _has(m, feature)]
+            candidates.append(
+                {
+                    "detector": detector,
+                    "peer_group": peer,
+                    "feature": feature,
+                    "n": n,
+                    "have": count["true"],
+                    "lack": lacking,
+                    "share": round(share, 3),
+                    "items": [
+                        {
+                            "item_id": m["item_id"],
+                            "file": m["file"],
+                            "line": m["line"],
+                            **_dependencies_of(m),
+                        }
+                        for m in lacking_items
+                    ],
+                    "examples": _peer_examples(members, feature, lacking_items[0]),
+                }
+            )
+    candidates.sort(
+        key=lambda c: (-c["share"], -c["n"], c["detector"], c["peer_group"], c["feature"])
+    )
+    listed, truncated = [], 0
+    for candidate in candidates:
+        room = limit - sum(len(c["items"]) for c in listed)
+        if room <= 0:
+            truncated += len(candidate["items"])
+        elif len(candidate["items"]) > room:
+            truncated += len(candidate["items"]) - room
+            listed.append({**candidate, "items": candidate["items"][:room]})
+        else:
+            listed.append(candidate)
+    return {"groups": groups, "candidates": listed, "truncated": truncated}
+
+
+def mine(
+    items,
+    min_items=DEFAULT_MIN_ITEMS,
+    min_confidence=DEFAULT_MIN_CONFIDENCE,
+    repo_root=None,
+    hide=frozenset(),
+):
+    """Return reported rules, strongest first.
+
+    With repo_root, each exception also gets a "git" block from the history of its line.
+    hide is a set of (detector, feature) pairs that are not reported.
+    """
+    validate_items(items)
+    items = _unique_items(items)
     best_by_exceptions = {}
     for (detector, peer), members in group_items(items).items():
         for rule in _candidates(detector, peer, members, min_items, min_confidence, hide):
@@ -464,6 +556,7 @@ def run(
     with_git=False,
     color=False,
     include_style=False,
+    with_inventory=False,
 ):
     if not Path(repo_root).is_dir():
         print(f"error: {repo_root} is not a directory", file=sys.stderr)
@@ -486,8 +579,12 @@ def run(
             for r in everything
             if (r["rule_id"].split(".", 1)[0], r["feature"]) in hide
         )
+    survey = inventory(items, hide) if with_inventory else None
     if as_json:
-        print(json.dumps({"version": 1, "rules": rules, "style_hidden": hidden}, indent=2))
+        payload = {"version": 1, "rules": rules, "style_hidden": hidden}
+        if survey is not None:
+            payload["inventory"] = survey
+        print(json.dumps(payload, indent=2))
     elif not rules:
         needed = next(
             (
@@ -510,7 +607,26 @@ def run(
         print(_format_text(rules, color=color))
     if hidden and not as_json:
         print(("\n" if rules else "") + _hidden_note(hidden))
+    if survey is not None and not as_json:
+        print("\n" + _format_inventory(survey))
     return 0
+
+
+def _format_inventory(survey) -> str:
+    """Plain text for --inventory: one line per candidate, then the items that lack the feature."""
+    lines = [f"inventory: {len(survey['groups'])} group(s), leads to read, not findings"]
+    for c in survey["candidates"]:
+        lines.append(
+            f"{c['detector']}.{c['peer_group']}.{c['feature']}  "
+            f"{c['have']} of {c['n']} have it, {c['lack']} lack it"
+        )
+        for item in c["items"]:
+            lines.append(f"  lacks: {item['file']}:{item['line']} ({item['item_id']})")
+    if not survey["candidates"]:
+        lines.append("no group has a feature that most of it has and a few items lack")
+    if survey["truncated"]:
+        lines.append(f"{survey['truncated']} more item(s) not listed")
+    return "\n".join(lines)
 
 
 def _positive_int(text):
@@ -567,6 +683,14 @@ def main(argv=None):
         action="store_true",
         help="also report style-only findings, such as a route with no response model",
     )
+    parser.add_argument(
+        "--inventory",
+        action="store_true",
+        help=(
+            "also list every peer group and the items that lack something most of their peers "
+            "have. These are leads to read, not findings: no size floor or confidence bound applies"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.path and args.repo and args.path != args.repo:
         parser.error("give the folder once: as a path or with --repo, not both")
@@ -591,6 +715,7 @@ def main(argv=None):
             args.json,
             with_git=args.with_git,
             include_style=args.include_style,
+            with_inventory=args.inventory,
             color=color,
         )
     except BrokenPipeError:

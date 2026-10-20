@@ -118,7 +118,9 @@ def test_every_command_is_in_the_exact_form_that_is_pre_approved():
 
 def test_the_relaxed_command_is_the_strict_one_plus_lower_limits():
     strict, relaxed = skill_commands()
-    assert relaxed.startswith(strict)
+    # Only the first scan asks for the inventory, so the relaxed one does not repeat it.
+    assert "--inventory" in strict and "--inventory" not in relaxed
+    assert relaxed.startswith(strict.replace(" --inventory", ""))
     assert "--min-items" in relaxed and "--min-confidence" in relaxed
 
 
