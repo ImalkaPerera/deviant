@@ -5,10 +5,16 @@ What Deviant does not do, so you can judge how far to trust a result.
 - **Needs enough similar items.** See [why small projects show nothing](how-it-works.md#why-small-projects-show-nothing).
 - **Finds only what a detector looks for.** Today that is FastAPI routes and GitHub
   Actions workflows.
-- **Reads code, does not run it.** Routes are found from decorators and `add_api_route`
-  calls. A router passed in as a function parameter, routes registered in a loop, and
+- **Reads code, does not run it.** Routes are found from decorators, `add_api_route`,
+  `add_route`, `add_websocket_route` and the call form `router.get("/x")(handler)`. A router
+  passed in as a function parameter, routes registered in a loop, and
   `include_router(get_router())` where the router comes from a call are not followed. A
   router stored on `self` is followed only inside its own class.
+- **A dependency is read only if it is in the repository.** Auth inside a dependency's body
+  is seen when that dependency is defined in the scanned code. A dependency imported from
+  an installed package is judged by its name alone.
+- **Star imports and aliases are followed only inside the repository.** A name that comes
+  from a module outside the scanned folder is judged by its name alone.
 - **Auth helpers are matched by name.** A route counts as protected if it calls a function
   named like one that checks credentials in its body. If several functions share that name,
   all of them must check credentials, otherwise the name is not trusted. Route handlers are
