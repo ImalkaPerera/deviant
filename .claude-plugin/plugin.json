@@ -1,6 +1,6 @@
 {
   "name": "deviant",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Finds likely bugs where code breaks the project's own patterns, and judges each exception as bug, intentional or unsure using the code, tests and git history.",
   "author": {
     "name": "ImalkaPerera",
