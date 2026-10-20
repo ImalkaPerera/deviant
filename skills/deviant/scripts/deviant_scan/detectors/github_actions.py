@@ -239,7 +239,8 @@ def _has_real_timeout(job) -> bool:
         return False
     value = job["timeout-minutes"]
     # An empty value (null) sets nothing, so it is not a limit.
-    if value is None or value == "":
+    # The loader reads null as the text "null", and "~" is the same null, so both are no limit.
+    if value is None or str(value).strip() in ("", "null", "~"):
         return False
     if isinstance(value, bool):
         return False

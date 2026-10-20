@@ -337,6 +337,8 @@ class _Found:
         self.attr_assigned: list[tuple[int, str, ast.expr]] = []
         # The class a function or call sits in, by id of the node, for `self.` lookups.
         self.enclosing_class: dict[int, int] = {}
+        # Functions written directly in a class body, as opposed to functions nested in a method.
+        self.class_members: set[int] = set()
 
 
 def _assigned_name(node):
@@ -392,6 +394,9 @@ def _collect(tree: ast.Module) -> _Found:
         elif isinstance(node, ast.ClassDef):
             found.classes.append(node)
             inner_owner = id(node)
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.class_members.add(id(child))
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             found.imports.append(node)
         elif isinstance(node, ast.Expr):
@@ -526,8 +531,11 @@ class _Symbols:
                     self.consts.setdefault((rel, (), name), value)
             for scope, node in info.functions:
                 # A method is keyed by its class, so it cannot be mistaken for a module function.
+                # Only a method is keyed by its class. A function nested inside a method keeps
+                # the scope it is defined in, so a route can still find it there.
                 owner = info.enclosing_class.get(id(node))
-                key_scope = (owner,) if owner is not None else scope
+                is_method = id(node) in info.class_members and owner is not None
+                key_scope = (owner,) if is_method else scope
                 self.functions.setdefault((rel, key_scope, node.name), node)
         for (rel, _, name), value in list(self.consts.items()):
             if isinstance(value, ast.Subscript) and _last_name(value.value) == "Annotated":
