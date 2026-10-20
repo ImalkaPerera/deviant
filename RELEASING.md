@@ -51,8 +51,10 @@ stored in this repository: PyPI trusts the workflow itself ("trusted publishing"
    git push origin v0.1.0
    ```
 
-6. Watch the **Release** workflow on the Actions tab. If you added a required reviewer, approve
-   the `publish` job there. When it finishes, the release is on PyPI.
+6. Watch the **Release** workflow on the Actions tab. Its first job, `verify`, stops the release
+   unless the tagged commit is on `main` and passes ruff and the tests. Then the `build` job
+   builds and checks the package, and the `publish` job waits for your approval if you added a
+   required reviewer. When it finishes, the release is on PyPI.
 7. Check it from a clean environment:
 
    ```bash
