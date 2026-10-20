@@ -182,6 +182,7 @@ def _workflow_items(rel, data, text):
             continue
         items.append(_job_item(rel, data, str(job_id), job, job_line))
         items.extend(_step_items(rel, job.get("steps"), lines, job_line))
+        items.extend(_run_step_items(rel, job.get("steps"), lines, job_line))
     return items
 
 
@@ -192,7 +193,9 @@ def _action_items(rel, data, text):
         return []
     lines = text.splitlines()
     steps_line = _line_of(lines, r"^\s+['\"]?steps['\"]?\s*:", regex=True)
-    return _step_items(rel, runs.get("steps"), lines, steps_line)
+    return _step_items(rel, runs.get("steps"), lines, steps_line) + _run_step_items(
+        rel, runs.get("steps"), lines, steps_line
+    )
 
 
 def _workflow_item(rel, data, jobs):
@@ -299,6 +302,46 @@ def _step_items(rel, steps, lines, start_line):
         cursor = line
         items.append(_uses_item(rel, uses, line, step.get("name")))
     return items
+
+
+def _run_step_items(rel, steps, lines, start_line):
+    """One item per shell step (`run:`), for whether it lets its failure pass.
+
+    A step with continue-on-error: true ignores its own failure, so it is reported as lacking
+    fails_on_error. Most run steps in a project fail on error, so a few that do not are leads.
+    """
+    items = []
+    if not isinstance(steps, list):
+        return items
+    cursor = start_line - 1
+    for step in steps:
+        if not isinstance(step, dict) or not isinstance(step.get("run"), str):
+            continue
+        first = next((ln.strip() for ln in step["run"].splitlines() if ln.strip()), "")
+        if not first:
+            continue
+        line = _line_of(lines, first, start=cursor)
+        cursor = line
+        items.append(
+            {
+                "detector": DETECTOR,
+                "peer_group": "gha_run_steps",
+                "item_id": f"{rel}:{line}",
+                "file": rel,
+                "line": line,
+                "features": {"fails_on_error": not _continues_on_error(step)},
+                "context": {"step_name": _short_text(step.get("name"))},
+            }
+        )
+    return items
+
+
+def _continues_on_error(step) -> bool:
+    """True when the step sets continue-on-error to true, so its failure is ignored."""
+    value = step.get("continue-on-error")
+    if isinstance(value, bool):
+        return value
+    return isinstance(value, str) and value.strip().lower() in ("true", "${{ true }}")
 
 
 def _uses_item(rel, uses, line, name):

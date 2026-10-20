@@ -128,6 +128,11 @@ permissions block. Local actions and workflows
 (`./...`) are skipped, and so are references built from expressions
 (`actions/checkout@${{ inputs.ref }}`), which are only known when the workflow runs.
 
+Every shell step (`run:`) in a job or a composite action is checked for `fails_on_error`: a step
+with `continue-on-error: true` lacks it, because it lets its own failure pass. Most shell steps
+in a project fail on error, so the few that do not stand out as leads in `--inventory`. An
+expression such as `${{ inputs.soft }}` is not read as ignoring failure.
+
 A comment that repeats a step's text does not move that step's line number. A file that
 cannot be parsed, is not a mapping, or is larger than 1 MB is reported on stderr and skipped.
 A junction that leads to a folder already scanned does not make an action count twice.
