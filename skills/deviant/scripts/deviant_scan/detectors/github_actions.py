@@ -142,7 +142,17 @@ def _action_files(root: Path) -> list[Path]:
             found.extend(
                 Path(dirpath) / name for name in sorted(filenames) if name in _ACTION_NAMES
             )
-    return [p for p in found if _usable(p, root)]
+    # A junction can lead to a folder already listed, so keep one path per real file.
+    seen = set()
+    unique = []
+    for path in found:
+        if not _usable(path, root):
+            continue
+        real = path.resolve()
+        if real not in seen:
+            seen.add(real)
+            unique.append(path)
+    return unique
 
 
 _ACTION_NAMES = {f"action{suffix}" for suffix in YAML_SUFFIXES}
@@ -210,12 +220,24 @@ def _job_item(rel, data, job_id, job, line):
         "file": rel,
         "line": line,
         "features": {
-            "has_timeout_minutes": "timeout-minutes" in job or _only_gathers_results(job),
+            "has_timeout_minutes": _has_real_timeout(job) or _only_gathers_results(job),
             # Workflow-level concurrency covers every job, like workflow-level permissions.
             "has_concurrency": "concurrency" in job or "concurrency" in data,
         },
         "context": {"runs_on": _short_text(job.get("runs-on"))},
     }
+
+
+def _has_real_timeout(job) -> bool:
+    """True if the job sets timeout-minutes to something other than zero.
+
+    Zero is not a limit: GitHub reads it as no time at all, so the check must not count it.
+    """
+    if "timeout-minutes" not in job:
+        return False
+    value = job["timeout-minutes"]
+    is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    return not (is_number and value <= 0)
 
 
 def _only_reusable(data) -> bool:

@@ -795,6 +795,16 @@ _SAYS_PUBLIC = re.compile(
     re.IGNORECASE,
 )
 COMMENT_LOOKBACK = 3
+# A claim of public access is void when the same sentence negates it, as in "Not open to everyone".
+_NEGATION = re.compile(r"\b(?:not|never|no longer)\b|n't\b", re.IGNORECASE)
+
+
+def _says_public(text: str) -> bool:
+    for match in _SAYS_PUBLIC.finditer(text):
+        sentence = re.split(r"[.;!?\n]", text[: match.start()])[-1]
+        if not _NEGATION.search(sentence):
+            return True
+    return False
 
 
 def _has_response_model(call, function) -> bool:
@@ -843,14 +853,14 @@ def _public_path(path: str) -> bool:
 
 
 def _declared_public(function, lines) -> bool:
-    if _SAYS_PUBLIC.search(ast.get_docstring(function) or ""):
+    if _says_public(ast.get_docstring(function) or ""):
         return True
     first = min([function.lineno] + [d.lineno for d in function.decorator_list])
     above = first - 2  # zero-based index of the line above the first decorator
     for index in range(above, max(above - COMMENT_LOOKBACK, -1), -1):
         if index >= len(lines) or not lines[index].lstrip().startswith("#"):
             break
-        if _SAYS_PUBLIC.search(lines[index]):
+        if _says_public(lines[index]):
             return True
     return False
 
