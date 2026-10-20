@@ -27,10 +27,10 @@ Strict rules come from the scanner's default settings. Leads come from `--invent
 | unclecode/crawl4ai | 107 | 0 | 0 | 6 |
 | bytedance/deer-flow | 449 | 0 | 0 | 16 |
 | hiyouga/LlamaFactory | 72 | 0 | 0 | 2 |
-| headroomlabs-ai/headroom | not in the scan | | | |
+| headroomlabs-ai/headroom | 503 | 0 | 0 | 7 |
 
-Totals: 13 strict rule exceptions in 5 repos, and about 100 leads in the other 15. Five
-repos produce no strict rule at all.
+Totals: 13 strict rule exceptions, all in 5 repos. The other 15 repos have no strict rule, and
+together with those 5 they hold 111 leads in all.
 
 Parse warnings: `TheAlgorithms/Python` (6 files), `unclecode/crawl4ai` (1 file) and
 `browser-use/browser-use` (1 file) contain Python that the scanner's Python 3.14 cannot read,

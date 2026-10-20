@@ -32,7 +32,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROUTE_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace", "api_route"}
 DEPENDENCY_CALLS = {"Depends", "Security"}
-PER_REPO = {"same_fastapi": 3, "other_fastapi": 2, "same_gha": 3, "other_gha": 2}
+PER_REPO = {"same_fastapi": 8, "other_fastapi": 6, "same_gha": 8, "other_gha": 6}
 
 
 def spaced(items, count):
