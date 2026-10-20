@@ -1,6 +1,9 @@
 # Detector only, on planted bugs (condition D, no AI)
 
 Run on 2026-10-17 with the detectors as of commit `46238f5`, the last detector change.
+Re-run on 2026-10-20 with v0.2.0 (commit `cdab846`). The counts were the same: 2 of 9 and
+0 of 13. The 0.2.0 detector changes (dependency bodies, mounts, monorepo imports, GitHub
+Actions job names) did not add or remove any planted bug from the report.
 Planted copies were made with `bench/mutations/plant.py` from the pinned SHAs in
 `bench/repos.json`. Nothing here uses Claude or any API key.
 
