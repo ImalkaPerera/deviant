@@ -100,6 +100,29 @@ unseen repos will be lower, and how much lower is not known until the sealed set
   against 52%), above it on auth removals (100% against 78%) and on timeouts (62% against 31%),
   and far below it on the two kinds with no detector.
 
+## Development run: shell steps checked for continue-on-error (2026-10-20, commit `535e7b7`)
+
+Every shell step (`run:`) now gets a `fails_on_error` feature, so a step that sets
+`continue-on-error: true` is a lead against the others. The planted "step ignores failure" bug
+is exactly this change, so this feature was built after seeing that kind on this set.
+
+| Kind | Category | Plus file scope | Plus continue-on-error |
+|---|---|---|---|
+| same | FastAPI auth dependency removed | 27 of 27 (100%) | 27 of 27 (100%) |
+| same | GitHub Actions job timeout removed | 24 of 39 (62%) | 24 of 39 (62%) |
+| other | Inverted `if not` in a route | 0 of 30 | 1 of 30 (3%) |
+| other | Step ignores failure | 1 of 30 (3%) | 30 of 30 (100%) |
+| | **All** | **52 of 126 (41%)** | **82 of 126 (65%)** |
+
+Cost was $0.52 for all 30 runs, against $3.78 for Claude alone, which found 65 of 126 (52%).
+No run errored.
+
+**This is development data, and it is the weakest of the three development results.** The
+feature targets a bug kind that was planted on this set, so the 100% on that kind says nothing
+about real workflows until the sealed set in `bench/repos_fresh.json` is scanned. On the dev set
+the feature also produced 6 leads that were not planted, which were not read. Precision is still
+not measured.
+
 ## Earlier runs (2026-10-18, before v0.2.0)
 
 | Kind | Category | First run | With relaxed-scan fallback |
