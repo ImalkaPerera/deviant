@@ -5,6 +5,7 @@ exception when --with-git is used.
 """
 
 import argparse
+import contextlib
 import importlib.util
 import json
 import os
@@ -78,6 +79,13 @@ def validate_items(items):
             and 1 <= span[0] <= span[1]
         ):
             raise ValueError(f"span must be [first line, last line], first <= last: {label!r}")
+        context = item.get("context")
+        if context is not None and not isinstance(context, dict):
+            raise ValueError(f"context must be a dict or None: {label!r}")
+        if isinstance(context, dict) and "dependencies" in context:
+            deps = context["dependencies"]
+            if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+                raise ValueError(f"context dependencies must be a list of strings: {label!r}")
         features = item["features"]
         if not isinstance(features, dict):
             raise ValueError(f"features must be a dict: {label!r}")
@@ -248,8 +256,14 @@ def load_detectors(detectors_dir: Path):
         spec = importlib.util.spec_from_file_location(f"deviant_detector_{path.stem}", path)
         module = importlib.util.module_from_spec(spec)
         try:
-            spec.loader.exec_module(module)
-        except Exception as error:  # one broken detector must not stop the scan
+            # A detector's stray print() would land in the report, and under --json would
+            # corrupt it, so its stdout goes to stderr.
+            with contextlib.redirect_stdout(sys.stderr):
+                spec.loader.exec_module(module)
+        except (
+            Exception,
+            SystemExit,
+        ) as error:  # a detector calling sys.exit must not end the scan
             print(f"warning: could not load detector {path.name}: {error}", file=sys.stderr)
             continue
         if callable(getattr(module, "extract", None)):
@@ -276,8 +290,9 @@ def _collect(modules, repo_root: Path):
     for module in modules:
         name = module.__name__.removeprefix("deviant_detector_")
         try:
-            found = module.extract(str(repo_root))
-        except Exception as error:  # one broken detector must not stop the scan
+            with contextlib.redirect_stdout(sys.stderr):
+                found = module.extract(str(repo_root))
+        except (Exception, SystemExit) as error:  # one broken detector must not stop the scan
             print(f"warning: detector {name} failed and was skipped: {error}", file=sys.stderr)
             continue
         try:

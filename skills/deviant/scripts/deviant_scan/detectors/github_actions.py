@@ -50,10 +50,26 @@ def _load(yaml, path: Path):
         # utf-8-sig drops a byte order mark, which editors on Windows often add.
         text = path.read_text(encoding="utf-8-sig")
         data = yaml.safe_load(text)
-    except (OSError, UnicodeDecodeError, yaml.YAMLError, ValueError, RecursionError, MemoryError):
+    except (
+        OSError,
+        UnicodeDecodeError,
+        yaml.YAMLError,
+        ValueError,
+        RecursionError,
+        MemoryError,
+    ) as error:
         # ValueError: PyYAML raises it for dates that do not exist, such as 2021-02-30.
+        _skipped(path, f"could not be parsed ({type(error).__name__})")
         return None  # one unreadable or hostile file must not stop the rest
-    return (text, data) if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        _skipped(path, "is not a YAML mapping")
+        return None
+    return (text, data)
+
+
+def _skipped(path: Path, reason: str) -> None:
+    """Say on stderr that a file was left out, so a missing finding is never silent."""
+    print(f"github_actions: {path.name} {reason} and was skipped", file=sys.stderr)
 
 
 def _inside(path: Path, root: Path) -> bool:
@@ -73,12 +89,12 @@ def _usable(path: Path, root: Path) -> bool:
     Symlinks and junctions could point outside the repository, so they are skipped.
     """
     try:
-        return (
-            path.is_file()
-            and not path.is_symlink()
-            and _inside(path, root)
-            and path.stat().st_size <= MAX_BYTES
-        )
+        if not (path.is_file() and not path.is_symlink() and _inside(path, root)):
+            return False
+        if path.stat().st_size > MAX_BYTES:
+            _skipped(path, f"is larger than {MAX_BYTES} bytes")
+            return False
+        return True
     except OSError:
         return False
 
