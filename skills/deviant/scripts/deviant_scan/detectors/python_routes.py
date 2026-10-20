@@ -181,6 +181,8 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
     trees = {}
     sources = {}
     failed = []
+    # A junction can lead to a file already read under another path. Read each file once.
+    seen_real: set[Path] = set()
     for dirpath, dirnames, filenames in os.walk(root):
         # os.walk follows Windows junctions, which is_symlink() does not report, so a
         # folder that leads outside the repository is dropped here.
@@ -201,6 +203,10 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
                         file=sys.stderr,
                     )
                     continue
+                real = path.resolve()
+                if real in seen_real:
+                    continue
+                seen_real.add(real)
                 source = path.read_bytes()
             except OSError:
                 continue
@@ -276,17 +282,33 @@ def _module_name(rel: str) -> str:
     return ".".join(parts)
 
 
-def _module_index(files) -> dict[str, str | None]:
-    """Map every dotted suffix of a module name to its file. Ambiguous suffixes map to None."""
-    index: dict[str, str | None] = {}
+def _module_candidates(files) -> dict[str, list[str]]:
+    """Map every dotted suffix of a module name to the files that have it.
+
+    A monorepo can hold app/auth.py twice, once per service, so a suffix can have several files.
+    """
+    index: dict[str, list[str]] = {}
     for rel in files:
         segments = _module_name(rel).split(".")
         for i in range(len(segments)):
-            key = ".".join(segments[i:])
-            if key in index and index[key] != rel:
-                index[key] = None
-            else:
-                index.setdefault(key, rel)
+            files_for_key = index.setdefault(".".join(segments[i:]), [])
+            if rel not in files_for_key:
+                files_for_key.append(rel)
+    return index
+
+
+def _folder_index(candidates: dict[str, list[str]]) -> dict[tuple, list[str]]:
+    """Map (module, folder path) to the files of that module under that folder.
+
+    A file is listed under every folder above it. Looking an importer's folders up from the
+    deepest one then finds the nearest candidate in one step, instead of comparing every file.
+    """
+    index: dict[tuple, list[str]] = {}
+    for module, rels in candidates.items():
+        for rel in rels:
+            folders = rel.split("/")[:-1]
+            for depth in range(len(folders) + 1):
+                index.setdefault((module, tuple(folders[:depth])), []).append(rel)
     return index
 
 
@@ -427,6 +449,8 @@ def _imports(nodes, rel):
             module = ".".join(base + ([node.module] if node.module else []))
             for alias in node.names:
                 if alias.name == "*":
+                    # Names from a star import are looked up in that module when used.
+                    out[f"*{module}"] = {"full": module, "from": None, "star": True}
                     continue
                 full = f"{module}.{alias.name}" if module else alias.name
                 out[alias.asname or alias.name] = {
@@ -444,7 +468,8 @@ class _Symbols:
 
     def __init__(self, trees, found):
         self.found = found
-        self.index = _module_index(trees)
+        self.candidates = _module_candidates(trees)
+        self.by_folder = _folder_index(self.candidates)
         self.imports = {rel: _imports(info.imports, rel) for rel, info in found.items()}
         self.router_names = _router_class_names(found)
         self.dependency_calls = {}
@@ -475,6 +500,16 @@ class _Symbols:
         self.auth_helpers = {
             name for name, fns in definitions.items() if all(_body_does_auth(fn) for fn in fns)
         }
+        # Dependencies that check credentials: a function whose body does, or a class whose
+        # __init__ does or depends on auth. A route that depends on one is guarded. Kept apart
+        # from auth_helpers, so a route that merely calls such a class in its body is not.
+        self.auth_classes = {
+            cls.name
+            for rel, info in self.found.items()
+            for cls in info.classes
+            if self._class_is_auth(cls, rel)
+        }
+        self.dependency_helpers = self.auth_helpers | self.auth_classes
 
     def _build(self):
         for rel, info in self.found.items():
@@ -494,14 +529,22 @@ class _Symbols:
                 if isinstance(value, ast.Call) and _last_name(value.func) in self.router_calls[rel]:
                     self.routers.setdefault(
                         (rel, scope, name),
-                        {"deps": self.keyword_dependencies(value, rel), "parents": []},
+                        {
+                            "deps": self.keyword_dependencies(value, rel),
+                            "parents": [],
+                            "prefix": _literal_prefix(_keyword(value, "prefix")),
+                        },
                     )
         for rel, info in self.found.items():
             for owner, name, value in info.attr_assigned:
                 if isinstance(value, ast.Call) and _last_name(value.func) in self.router_calls[rel]:
                     self.routers.setdefault(
                         (rel, (owner,), name),
-                        {"deps": self.keyword_dependencies(value, rel), "parents": []},
+                        {
+                            "deps": self.keyword_dependencies(value, rel),
+                            "parents": [],
+                            "prefix": _literal_prefix(_keyword(value, "prefix")),
+                        },
                     )
         for rel, info in self.found.items():
             for scope, call in info.include_calls:
@@ -512,7 +555,9 @@ class _Symbols:
                     continue
                 parent = self.find(call.func.value, rel, scope, self.routers, owner)
                 added = self.keyword_dependencies(call, rel)
-                self.routers[child]["parents"].append((parent, added))
+                self.routers[child]["parents"].append(
+                    (parent, added, _literal_prefix(_keyword(call, "prefix")))
+                )
 
     # -- finding a name's definition --
 
@@ -532,10 +577,10 @@ class _Symbols:
             imported = self.imports[rel].get(expr.id)
             if imported and imported["from"]:
                 module, original = imported["from"]
-                target = self.index.get(module)
+                target = self._target(module, rel)
                 if target:
                     return self._exported(target, original, table, 0)
-            return None
+            return self._star_key(expr.id, rel, table)
         dotted = _plain_dotted(expr)
         if dotted is None or "." not in dotted:
             return None
@@ -546,7 +591,7 @@ class _Symbols:
             modules.append(".".join([imported["full"], *parts[1:-1]]))
         modules.append(".".join(parts[:-1]))  # `import a.b.c` then a.b.c.thing
         for module in modules:
-            target = self.index.get(module)
+            target = self._target(module, rel)
             if target:
                 key = self._exported(target, parts[-1], table, 0)
                 if key:
@@ -563,7 +608,7 @@ class _Symbols:
         imported = self.imports[target].get(name)
         if imported and imported["from"]:
             module, original = imported["from"]
-            next_target = self.index.get(module)
+            next_target = self._target(module, target)
             if next_target and next_target != target:
                 return self._exported(next_target, original, table, depth + 1)
         return None
@@ -638,6 +683,65 @@ class _Symbols:
                 types += alias_types
         return deps, types
 
+    def _target(self, module: str, importer: str) -> str | None:
+        """The file a dotted module name refers to, seen from the file that imports it."""
+        candidates = self.candidates.get(module)
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        # The deepest folder shared with the importer holds the nearest candidates. Two of them
+        # at that depth tie, and a tie is not guessed.
+        folders = importer.split("/")[:-1]
+        for depth in range(len(folders), -1, -1):
+            hits = self.by_folder.get((module, tuple(folders[:depth])))
+            if hits:
+                return hits[0] if len(hits) == 1 else None
+        return None
+
+    def _class_is_auth(self, cls, rel) -> bool:
+        """True if a class's __init__ depends on auth or checks credentials itself."""
+        init = next(
+            (
+                node
+                for node in cls.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.name == "__init__"
+            ),
+            None,
+        )
+        if init is None:
+            return False
+        names, _ = _function_dependencies(init, rel, self)
+        return any(_is_auth(n, set()) for n in names) or _raises_denial(init)
+
+    def prefixes(self, key, seen=None) -> list[str]:
+        """Every URL prefix a router's routes can be mounted under, from its own prefix and
+        each include_router call up the chain. A router with no mount has just its own prefix.
+        """
+        seen = set() if seen is None else seen
+        if key in seen:
+            return [self.routers[key]["prefix"]]
+        seen.add(key)
+        info = self.routers[key]
+        if not info["parents"]:
+            return [info["prefix"]]
+        out = []
+        for parent, _added, mount in info["parents"]:
+            bases = self.prefixes(parent, seen) if parent is not None else [""]
+            out += [base + mount + info["prefix"] for base in bases]
+        return out
+
+    def _star_key(self, name, rel, table):
+        """The key of a name that a `from module import *` in this file brings in."""
+        for imported in self.imports[rel].values():
+            if imported.get("star"):
+                target = self._target(imported["full"], rel)
+                key = self._exported(target, name, table, 0) if target else None
+                if key:
+                    return key
+        return None
+
     def effective_dependencies(self, key, seen=None) -> list[str]:
         """Dependencies a router's routes get from the router and every router that includes it.
 
@@ -649,7 +753,7 @@ class _Symbols:
         seen.add(key)
         info = self.routers[key]
         names = list(info["deps"])
-        for parent, added in info["parents"]:
+        for parent, added, _prefix in info["parents"]:
             names += added
             if parent is not None:
                 names += self.effective_dependencies(parent, seen)
@@ -723,6 +827,8 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     _item(
                         rel, method, path, node.lineno, names, types, dec, rate_decorator,
                         context, extra_auth, node, lines, symbols.auth_helpers,
+                        dependency_helpers=symbols.dependency_helpers,
+                        mounts=symbols.prefixes(key),
                         span=[min(d.lineno for d in node.decorator_list), node.lineno],
                     )
                 )  # fmt: skip
@@ -766,6 +872,8 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     function,
                     lines,
                     symbols.auth_helpers,
+                    dependency_helpers=symbols.dependency_helpers,
+                    mounts=symbols.prefixes(key),
                     span=[call.lineno, call.end_lineno or call.lineno],
                 )
             )
@@ -806,6 +914,8 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     function,
                     lines,
                     symbols.auth_helpers,
+                    dependency_helpers=symbols.dependency_helpers,
+                    mounts=symbols.prefixes(key),
                     span=[call.lineno, call.end_lineno or call.lineno],
                 )
             )
@@ -822,13 +932,15 @@ def _lambda_dependencies(node, rel, symbols):
 
 def _item(
     rel, method, path, line, names, types, call, rate_decorator, context, extra_auth,
-    function=None, lines=(), helpers=frozenset(), span=None,
+    function=None, lines=(), helpers=frozenset(), span=None, dependency_helpers=frozenset(),
+    mounts=None,
 ):  # fmt: skip
     features = {
         "is_mutating": method in MUTATING,
         "has_auth": any(_is_auth(n, extra_auth) for n in names)
+        or any(_last_segment(n) in dependency_helpers for n in names)
         or any(_matches_auth_type(t) for t in types)
-        or _auth_outside_dependencies(function, path, lines, helpers),
+        or _auth_outside_dependencies(function, _public_route(path, mounts or []), lines, helpers),
         "has_response_model": _has_response_model(call, function),
         "has_rate_limit": rate_decorator or any(_is_rate(n) for n in names),
     }
@@ -922,9 +1034,9 @@ def _is_204(node) -> bool:
     return "204" in (_dotted(node) or "")
 
 
-def _auth_outside_dependencies(function, path, lines, helpers=frozenset()) -> bool:
+def _auth_outside_dependencies(function, public, lines, helpers=frozenset()) -> bool:
     """Auth that is written in the route, announced by its docs, or unneeded by its path."""
-    if _public_path(path):
+    if public:
         return True
     if function is None:
         return False
@@ -999,6 +1111,19 @@ def _body_does_auth(function, helpers=frozenset()) -> bool:
     return False
 
 
+def _raises_denial(function) -> bool:
+    """True if the function itself raises HTTPException with a 401 or 403 status.
+
+    Narrower than _body_does_auth: a class's __init__ calling a helper named verify_* is
+    usually just validation, so only an explicit denial counts for a dependency class.
+    """
+    for node in ast.walk(function):
+        if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+            if _last_name(node.exc.func) == "HTTPException" and _denies(node.exc):
+                return True
+    return False
+
+
 def _denies(call) -> bool:
     """True for HTTPException with a 401 or 403 status."""
     status = call.args[0] if call.args else _keyword(call, "status_code")
@@ -1038,6 +1163,11 @@ def _function_dependencies(node, rel, symbols):
         alias_deps, alias_types = symbols.alias_names(annotation, rel)
         names += symbols.depends_names(annotation, rel) + alias_deps
         types += alias_types + _type_names(annotation)
+        # Optional["CurrentUser"] names an alias inside a string, which must be read too.
+        for inner in _nested_annotations(annotation):
+            inner_deps, inner_types = symbols.alias_names(inner, rel)
+            names += symbols.depends_names(inner, rel) + inner_deps
+            types += inner_types
     return names, types
 
 
@@ -1167,6 +1297,44 @@ def _plain_dotted(node) -> str | None:
 def _last_name(node) -> str:
     name = _dotted(node)
     return name.split(".")[-1] if name else ""
+
+
+def _literal_prefix(expr) -> str:
+    """A router or include prefix written as a plain string, else "" (unknown or none)."""
+    if isinstance(expr, ast.Constant) and isinstance(expr.value, str):
+        return expr.value
+    return ""
+
+
+def _public_route(path: str, mounts: list[str]) -> bool:
+    """True if the route is public by its own path, or is a root route under a public mount.
+
+    A mount prefix alone says nothing about a route with its own path: under prefix "/docs",
+    DELETE "/{doc_id}" is still unprotected. Only a route at the root takes its mount's name.
+    """
+    if _public_path(path):
+        return True
+    has_own_path = any(segment for segment in path.split("/"))
+    if has_own_path:
+        return False
+    return bool(mounts) and all(_public_path(mount) for mount in mounts)
+
+
+def _nested_annotations(expr) -> list[ast.expr]:
+    """Expressions written as strings inside an annotation, such as Optional["CurrentUser"]."""
+    found = []
+    for node in ast.walk(expr):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                found.append(ast.parse(node.value, mode="eval").body)
+            except SyntaxError:
+                pass
+    return found
+
+
+def _last_segment(name: str) -> str:
+    """The last part of a dotted name: "deps.get_user" -> "get_user"."""
+    return name.split(".")[-1]
 
 
 def _normalise(name: str) -> str:
