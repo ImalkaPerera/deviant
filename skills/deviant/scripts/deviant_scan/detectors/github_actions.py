@@ -11,6 +11,23 @@ import sys
 from pathlib import Path
 
 DETECTOR = "github_actions"
+
+# Control and bidirectional characters can come from a scanned project's file names. They are
+# shown as escapes so a hostile name cannot recolour or rewrite what the reader sees.
+_UNSAFE_RANGES = ((0x00, 0x1F), (0x7F, 0x9F), (0x2028, 0x2029), (0x202A, 0x202E), (0x2066, 0x2069))
+_UNSAFE = re.compile("[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in _UNSAFE_RANGES) + "]")
+
+
+def _show(text) -> str:
+    """text with control and bidirectional characters replaced by visible escapes."""
+
+    def escape(match):
+        code = ord(match.group())
+        return chr(92) + (f"x{code:02x}" if code < 0x100 else f"u{code:04x}")
+
+    return _UNSAFE.sub(escape, str(text))
+
+
 MAX_BYTES = 1_000_000
 MAX_ACTION_DEPTH = 6
 # A git commit SHA, or a Docker image digest. Both name exactly one immutable thing.
@@ -35,12 +52,20 @@ def extract(repo_root: str) -> list[dict]:
         loaded = _load(yaml, path)
         if loaded is not None:
             text, data = loaded
-            items.extend(_workflow_items(path.relative_to(root).as_posix(), data, text))
+            items.extend(
+                _workflow_items(
+                    path.relative_to(root).as_posix(), data, text, _step_lines(yaml, text)
+                )
+            )
     for path in _action_files(root):
         loaded = _load(yaml, path)
         if loaded is not None:
             text, data = loaded
-            items.extend(_action_items(path.relative_to(root).as_posix(), data, text))
+            items.extend(
+                _action_items(
+                    path.relative_to(root).as_posix(), data, text, _step_lines(yaml, text)
+                )
+            )
     return items
 
 
@@ -90,7 +115,7 @@ def _workflow_loader(yaml):
 
 def _skipped(path: Path, reason: str) -> None:
     """Say on stderr that a file was left out, so a missing finding is never silent."""
-    print(f"github_actions: {path.name} {reason} and was skipped", file=sys.stderr)
+    print(f"github_actions: {_show(path.name)} {reason} and was skipped", file=sys.stderr)
 
 
 def _inside(path: Path, root: Path) -> bool:
@@ -160,7 +185,7 @@ def _action_files(root: Path) -> list[Path]:
 _ACTION_NAMES = {f"action{suffix}" for suffix in YAML_SUFFIXES}
 
 
-def _workflow_items(rel, data, text):
+def _workflow_items(rel, data, text, step_lines=None):
     lines = text.splitlines()
     jobs = data.get("jobs") if isinstance(data.get("jobs"), dict) else {}
     items = [_workflow_item(rel, data, jobs)]
@@ -182,11 +207,13 @@ def _workflow_items(rel, data, text):
             continue
         items.append(_job_item(rel, data, str(job_id), job, job_line))
         items.extend(_step_items(rel, job.get("steps"), lines, job_line))
-        items.extend(_run_step_items(rel, job.get("steps"), lines, job_line))
+        items.extend(
+            _run_step_items(rel, job.get("steps"), lines, job_line, str(job_id), step_lines)
+        )
     return items
 
 
-def _action_items(rel, data, text):
+def _action_items(rel, data, text, step_lines=None):
     """Third-party steps of a composite action. Other kinds of action have no steps."""
     runs = data.get("runs")
     if not isinstance(runs, dict) or runs.get("using") != "composite":
@@ -194,7 +221,7 @@ def _action_items(rel, data, text):
     lines = text.splitlines()
     steps_line = _line_of(lines, r"^\s+['\"]?steps['\"]?\s*:", regex=True)
     return _step_items(rel, runs.get("steps"), lines, steps_line) + _run_step_items(
-        rel, runs.get("steps"), lines, steps_line
+        rel, runs.get("steps"), lines, steps_line, "runs", step_lines
     )
 
 
@@ -304,29 +331,35 @@ def _step_items(rel, steps, lines, start_line):
     return items
 
 
-def _run_step_items(rel, steps, lines, start_line):
+def _run_step_items(rel, steps, lines, start_line, owner="", step_lines=None):
     """One item per shell step (`run:`), for whether it lets its failure pass.
 
     A step with continue-on-error: true ignores its own failure, so it is reported as lacking
     fails_on_error. Most run steps in a project fail on error, so a few that do not are leads.
+
+    A step is named by its job and position ("build step 3"), so two steps never share an id
+    even when their text is the same. Its line comes from the YAML positions in step_lines, and
+    only falls back to a text search when those are missing.
     """
     items = []
     if not isinstance(steps, list):
         return items
     cursor = start_line - 1
-    for step in steps:
+    for index, step in enumerate(steps):
         if not isinstance(step, dict) or not isinstance(step.get("run"), str):
             continue
         first = next((ln.strip() for ln in step["run"].splitlines() if ln.strip()), "")
         if not first:
             continue
-        line = _line_of(lines, first, start=cursor)
+        line = (step_lines or {}).get((owner, index))
+        if line is None:
+            line = _line_of(lines, first, start=cursor)
         cursor = line
         items.append(
             {
                 "detector": DETECTOR,
                 "peer_group": "gha_run_steps",
-                "item_id": f"{rel}:{line}",
+                "item_id": f"{owner} step {index + 1}" if owner else f"step {index + 1}",
                 "file": rel,
                 "line": line,
                 "features": {"fails_on_error": not _continues_on_error(step)},
@@ -334,6 +367,42 @@ def _run_step_items(rel, steps, lines, start_line):
             }
         )
     return items
+
+
+def _step_lines(yaml, text) -> dict:
+    """{(job id or "runs", step index): line} for every step, from the YAML node positions.
+
+    Reading positions from the parsed nodes is exact for folded blocks, escaped strings and
+    aliases, where searching the source text for a step's first line is not.
+    """
+    positions = {}
+    try:
+        root = yaml.compose(text, Loader=_workflow_loader(yaml))
+    except (yaml.YAMLError, ValueError, AttributeError, RecursionError, MemoryError):
+        return positions
+    if not isinstance(root, yaml.MappingNode):
+        return positions
+
+    def child(node, key):
+        for k, v in node.value:
+            if getattr(k, "value", None) == key:
+                return v
+        return None
+
+    def record(owner, steps):
+        if isinstance(steps, yaml.SequenceNode):
+            for index, step in enumerate(steps.value):
+                positions[(owner, index)] = step.start_mark.line + 1
+
+    jobs = child(root, "jobs")
+    if isinstance(jobs, yaml.MappingNode):
+        for key, job in jobs.value:
+            if isinstance(job, yaml.MappingNode) and hasattr(key, "value"):
+                record(str(key.value), child(job, "steps"))
+    runs = child(root, "runs")
+    if isinstance(runs, yaml.MappingNode):
+        record("runs", child(runs, "steps"))
+    return positions
 
 
 def _continues_on_error(step) -> bool:

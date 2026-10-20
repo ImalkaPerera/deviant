@@ -33,10 +33,12 @@ def extract(repo_root: str) -> list[dict]: ...
 | `line` | An integer, 1 or more. |
 | `span` | Optional. `[first line, last line]`, both 1 or more and first not after last. The lines where the item is written, when that is more than `line`. A route's decorators and its `def` line, for example. Git evidence uses the newest change in the span. |
 | `features` | A dict of name to `True` or `False`. Nothing else (not `1`, not `None`). |
-| `context` | Optional. Anything JSON can hold. |
+| `context` | Optional. A dict, or `None`. If it has a `dependencies` key, that must be a list of strings: the scan shows it on each exception and lead. Other keys are free. |
 
 Feature names use letters, digits and underscores, and must not contain `_implies_`.
-Every item in a peer group must have the same feature names.
+Every item in a peer group must have the same feature names. Items with the same detector,
+peer group, `item_id`, file and line are counted once. A module may define
+`STYLE_FEATURES` as a set of feature names that are hidden unless `--include-style` is given.
 
 ## Two kinds of feature
 
@@ -50,7 +52,8 @@ Every item in a peer group must have the same feature names.
 The peer group is the set of items that should follow the same rules. Make it as small as
 it can be while still holding enough items (at least 20 by default). FastAPI routes are
 grouped by folder because one folder usually follows one convention, while a whole project
-often mixes styles.
+often mixes styles. With `--inventory`, a group of 4 or more items, and 3 or more of its items
+in one file, are also compared as leads, with no size floor.
 
 ## Behaviour rules
 

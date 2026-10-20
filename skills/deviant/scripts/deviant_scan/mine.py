@@ -660,12 +660,36 @@ def run(
             f"{min_items} similar items, and {reach}"
         )
     else:
-        print(_format_text(rules, color=color))
+        print(_format_text(_printable(rules), color=color))
     if hidden and not as_json:
         print(("\n" if rules else "") + _hidden_note(hidden))
     if survey is not None and not as_json:
-        print("\n" + _format_inventory(survey))
+        print("\n" + _format_inventory(_printable(survey)))
     return 0
+
+
+# Text printed to a terminal comes from a scanned project: route paths, file names, job ids,
+# dependency names and commit subjects. Control and bidirectional characters in them could
+# recolour the screen, rewrite earlier lines or forge report lines, so the text output shows
+# them as escapes. JSON output needs nothing: json.dumps already escapes them.
+_UNSAFE_RANGES = ((0x00, 0x1F), (0x7F, 0x9F), (0x2028, 0x2029), (0x202A, 0x202E), (0x2066, 0x2069))
+_UNSAFE = re.compile("[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in _UNSAFE_RANGES) + "]")
+
+
+def _printable(value):
+    """A copy of value, with control and bidirectional characters in every string escaped."""
+    if isinstance(value, str):
+
+        def escape(match):
+            code = ord(match.group())
+            return chr(92) + (f"x{code:02x}" if code < 0x100 else f"u{code:04x}")
+
+        return _UNSAFE.sub(escape, value)
+    if isinstance(value, list):
+        return [_printable(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _printable(v) for k, v in value.items()}
+    return value
 
 
 def _format_inventory(survey) -> str:

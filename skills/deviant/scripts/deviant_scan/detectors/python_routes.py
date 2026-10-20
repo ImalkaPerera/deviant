@@ -118,6 +118,23 @@ AUTH_WORD_PAIRS = {
 }
 # "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
 RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
+
+# Control and bidirectional characters can come from a scanned project's file names. They are
+# shown as escapes so a hostile name cannot recolour or rewrite what the reader sees.
+_UNSAFE_RANGES = ((0x00, 0x1F), (0x7F, 0x9F), (0x2028, 0x2029), (0x202A, 0x202E), (0x2066, 0x2069))
+_UNSAFE = re.compile("[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in _UNSAFE_RANGES) + "]")
+
+
+def _show(text) -> str:
+    """text with control and bidirectional characters replaced by visible escapes."""
+
+    def escape(match):
+        code = ord(match.group())
+        return chr(92) + (f"x{code:02x}" if code < 0x100 else f"u{code:04x}")
+
+    return _UNSAFE.sub(escape, str(text))
+
+
 MAX_BYTES = 1_000_000
 MAX_FOLLOW_DEPTH = 5
 SKIP_DIRS = {
@@ -199,7 +216,8 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
                     continue
                 if path.stat().st_size > MAX_BYTES:
                     print(
-                        f"python_routes: {rel} is larger than {MAX_BYTES} bytes and was skipped",
+                        f"python_routes: {_show(rel)} is larger than {MAX_BYTES} bytes "
+                        "and was skipped",
                         file=sys.stderr,
                     )
                     continue
@@ -220,7 +238,8 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
                 # Plain Jinja templates are expected here and stay quiet. A broken file that
                 # defines routes is different: its routes are missed, so say so.
                 print(
-                    f"python_routes: {rel} defines routes but could not be parsed and was skipped",
+                    f"python_routes: {_show(rel)} defines routes but could not be parsed "
+                    "and was skipped",
                     file=sys.stderr,
                 )
     if failed:
@@ -229,7 +248,7 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
         shown = ", ".join(failed[:3]) + (" ..." if len(failed) > 3 else "")
         print(
             f"python_routes: could not parse {len(failed)} file(s) with Python {version}: "
-            f"{shown}. They have a syntax error or use syntax newer than this Python; "
+            f"{_show(shown)}. They have a syntax error or use syntax newer than this Python; "
             "results that depend on them can be wrong.",
             file=sys.stderr,
         )

@@ -28,7 +28,9 @@ def extract(repo_root: str) -> list[dict]:
       file       - path relative to repo_root, with forward slashes
       line       - 1-based line number
       features   - {name: bool}; every item must have the same feature names
-      context    - optional extra facts for the judge step
+      span       - optional [first line, last line] where the item is written
+      context    - optional dict of extra facts for the judge step; a
+                   "dependencies" key must be a list of strings
     """
     items: list[dict] = []
     return items
