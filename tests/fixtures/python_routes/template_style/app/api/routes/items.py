@@ -21,6 +21,6 @@ def update_item(session: SessionDep, current_user: deps.CurrentUser, item_id: in
     return {}
 
 
-@router.post("/public")
-def public_item(session: SessionDep):
+@router.post("/notes")
+def note_item(session: SessionDep):
     return {}

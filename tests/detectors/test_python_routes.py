@@ -105,7 +105,7 @@ def test_annotated_aliases_imported_from_another_module_count_as_auth():
 
 
 def test_alias_without_auth_does_not_count_as_auth():
-    assert not features_for("template_style", "POST /public")["has_auth"]  # SessionDep only
+    assert not features_for("template_style", "POST /notes")["has_auth"]  # SessionDep only
 
 
 def test_router_declared_with_a_type_annotation_is_found():

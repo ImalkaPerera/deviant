@@ -101,6 +101,8 @@ AUTH_WORD_PAIRS = {
     ("web", "user"),
     ("validate", "session"),
     ("validate", "identity"),
+    # RoleChecker(["admin"]) and role_checker(...) are dependencies that check a role.
+    ("role", "checker"),
 }
 # "limit" is left out on purpose: pagination dependencies such as limit_offset are not rate limits.
 RATE_WORDS = {"rate", "ratelimit", "limiter", "throttle"}
@@ -664,6 +666,14 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
             names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(dec, rel)
             more_names, types = _function_dependencies(node, rel, symbols)
             names += more_names
+            # Other decorators such as @requires_login("admin") are guards: their names count.
+            names += [
+                guard
+                for d in node.decorator_list
+                if d is not dec
+                and (guard := _dotted(d.func if isinstance(d, ast.Call) else d))
+                and _is_auth(guard, extra_auth)
+            ]
             rate_decorator = any(
                 _is_rate(_dotted(d.func if isinstance(d, ast.Call) else d) or "")
                 for d in node.decorator_list
@@ -760,7 +770,7 @@ _PUBLIC_SEGMENTS = {
     "login", "logout", "register", "signup", "sign_in", "signin", "sign_up", "signout",
     "sign_out", "session", "token", "refresh", "callback", "health", "healthz", "ping",
     "docs", "redoc", "openapi.json", "forgot_password", "reset_password", "request_verify_token",
-    "verify", "authorize",
+    "verify", "authorize", "public",
 }  # fmt: skip
 _CALL_PREFIXES = {"require", "verify", "authenticate", "authorize", "authorise"}
 _CREDENTIAL_PARAMS = {
@@ -860,6 +870,9 @@ def _credential_params(function) -> bool:
         for source in sources:
             for node in ast.walk(source):
                 if isinstance(node, ast.Call) and _last_name(node.func) in _CREDENTIAL_SOURCES:
+                    # A cookie is a session credential whatever the parameter is called.
+                    if _last_name(node.func) == "Cookie":
+                        return True
                     labels = [arg.arg] + [
                         k.value.value
                         for k in node.keywords
