@@ -69,6 +69,37 @@ set up in `bench/PREREGISTRATION.md` and has not been run.
   not been read. Repos where the skill reported nothing (AgentChat, uv, pytest) show 0 found
   and 0 claimed.
 
+## Development run: the inventory also compares neighbours in one file (2026-10-20, commit `358b0d9`)
+
+The inventory now also compares an item with the peers in its own file (three or more), as well
+as with the whole group. Same 30 planted copies, three runs each, same model and prompt.
+
+| Kind | Category | Whole-group inventory | Plus file scope |
+|---|---|---|---|
+| same | FastAPI auth dependency removed | 17 of 27 (63%) | 27 of 27 (100%) |
+| same | GitHub Actions job timeout removed | 15 of 39 (38%) | 24 of 39 (62%) |
+| other | Inverted `if not` in a route | 0 of 30 | 0 of 30 |
+| other | Step ignores failure | 0 of 30 | 1 of 30 (3%) |
+| | **All** | **32 of 126 (25%)** | **52 of 126 (41%)** |
+
+Cost was $0.48 for all 30 runs, against $3.78 for Claude alone, which found 65 of 126 (52%).
+No run errored.
+
+**This is a development result, and the strongest caveat applies to it.** File scope was added
+after looking at this set's missed bugs, and the 100% on auth removals is on bugs that were
+planted by removing a dependency from one route in a file where its neighbours have it. That is
+exactly the situation file scope is built for. Real code has natural exceptions, so the result on
+unseen repos will be lower, and how much lower is not known until the sealed set in
+`bench/repos_fresh.json` is scanned.
+
+- Precision is still not measured. The scorer counted 2 to 12 unmatched claims per run. They
+  have not been read, so some may be false alarms.
+- The skill still finds nothing for the inverted-condition kind, which no detector checks, and
+  almost nothing for the ignored-failure kind.
+- Claude alone found 65 of 126 on the same bugs, so the skill is now below it overall (41%
+  against 52%), above it on auth removals (100% against 78%) and on timeouts (62% against 31%),
+  and far below it on the two kinds with no detector.
+
 ## Earlier runs (2026-10-18, before v0.2.0)
 
 | Kind | Category | First run | With relaxed-scan fallback |
