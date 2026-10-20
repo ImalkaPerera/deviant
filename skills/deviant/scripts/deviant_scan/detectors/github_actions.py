@@ -49,7 +49,7 @@ def _load(yaml, path: Path):
     try:
         # utf-8-sig drops a byte order mark, which editors on Windows often add.
         text = path.read_text(encoding="utf-8-sig")
-        data = yaml.safe_load(text)
+        data = yaml.load(text, Loader=_workflow_loader(yaml))
     except (
         OSError,
         UnicodeDecodeError,
@@ -65,6 +65,25 @@ def _load(yaml, path: Path):
         _skipped(path, "is not a YAML mapping")
         return None
     return (text, data)
+
+
+def _workflow_loader(yaml):
+    """A safe loader that reads true, false, on, yes, no and null as plain text.
+
+    YAML 1.1 reads a bare `on:` key or a job named `yes` as a boolean, and `null` as nothing.
+    Either loses the job's name and hides it from the checks. GitHub reads these words as text,
+    so the loader does too.
+    """
+
+    class Loader(yaml.SafeLoader):
+        pass
+
+    plain_tags = {"tag:yaml.org,2002:bool", "tag:yaml.org,2002:null"}
+    Loader.yaml_implicit_resolvers = {
+        first: [(tag, pattern) for tag, pattern in resolvers if tag not in plain_tags]
+        for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+    }
+    return Loader
 
 
 def _skipped(path: Path, reason: str) -> None:
@@ -313,6 +332,9 @@ def _first_child_indent(lines, parent_line):
 def _line_of(lines, needle, start=0, regex=False):
     """1-based line number of the first match at or after start; 1 if not found."""
     for index in range(max(start, 0), len(lines)):
+        # A comment can repeat the text being searched for, so comment lines never match.
+        if lines[index].lstrip().startswith("#"):
+            continue
         found = re.search(needle, lines[index]) if regex else needle in lines[index]
         if found:
             return index + 1

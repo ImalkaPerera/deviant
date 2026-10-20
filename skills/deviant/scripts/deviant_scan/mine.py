@@ -183,7 +183,10 @@ def _candidates(detector, peer, members, min_items, min_confidence, hide=frozens
 
 
 def _sort_key(rule):
-    return (-rule["wlb95"], -rule["n"], rule["v"], rule["kind"] != "plain", rule["rule_id"])
+    # Rank by the unrounded bound. The rounded wlb95 is for display only, and ranking by it
+    # made nearly equal rules swap places depending on their size.
+    exact = wilson_lower_bound(rule["s"], rule["n"])
+    return (-exact, -rule["n"], rule["v"], rule["kind"] != "plain", rule["rule_id"])
 
 
 def mine(
@@ -199,9 +202,22 @@ def mine(
     hide is a set of (detector, feature) pairs that are not reported.
     """
     validate_items(items)
+    # Sort by everything, features included, before keeping one of each. Then a duplicate
+    # with conflicting features is resolved the same way whatever order detectors return.
+    ordered = sorted(
+        items,
+        key=lambda i: (
+            i["file"],
+            i["line"],
+            i["item_id"],
+            i["detector"],
+            i["peer_group"],
+            sorted(i["features"].items()),
+        ),
+    )
     # The same item reported twice would inflate the group, so keep one of each.
     unique = {}
-    for entry in items:
+    for entry in ordered:
         key = (
             entry["detector"],
             entry["peer_group"],
@@ -210,8 +226,7 @@ def mine(
             entry["line"],
         )
         unique.setdefault(key, entry)
-    # Sort first so the output does not depend on the order detectors return items.
-    items = sorted(unique.values(), key=lambda i: (i["file"], i["line"], i["item_id"]))
+    items = list(unique.values())
     best_by_exceptions = {}
     for (detector, peer), members in group_items(items).items():
         for rule in _candidates(detector, peer, members, min_items, min_confidence, hide):
