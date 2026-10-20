@@ -145,7 +145,7 @@ def extract(repo_root: str) -> list[dict]:
     extra_auth = _extra_auth_words(root)
     trees, sources = _parse_files(root)
     found = {rel: _collect(tree) for rel, tree in trees.items()}
-    symbols = _Symbols(trees, found)
+    symbols = _Symbols(trees, found, sources)
     items = []
     for rel, info in found.items():
         items.extend(_routes_in_file(rel, info, symbols, extra_auth, sources[rel]))
@@ -432,7 +432,9 @@ def _imports(nodes, rel):
 
     Imports anywhere in the file count, including inside functions and `if TYPE_CHECKING`.
     """
-    package = _module_name(rel).split(".")
+    name = _module_name(rel)
+    # A root-level __init__.py has an empty name, so it has no package parts at all.
+    package = name.split(".") if name else []
     if not rel.endswith("__init__.py"):
         package = package[:-1]
     out = {}
@@ -466,8 +468,13 @@ def _imports(nodes, rel):
 class _Symbols:
     """Everything needed to follow a name from one file to where it is defined."""
 
-    def __init__(self, trees, found):
+    def __init__(self, trees, found, sources):
         self.found = found
+        self.sources = sources
+        # Which file each function lives in, so a comment is read from the endpoint's own file.
+        self.function_file = {
+            id(node): rel for rel, info in found.items() for _scope, node in info.functions
+        }
         self.candidates = _module_candidates(trees)
         self.by_folder = _folder_index(self.candidates)
         self.imports = {rel: _imports(info.imports, rel) for rel, info in found.items()}
@@ -489,6 +496,7 @@ class _Symbols:
         self.aliases: dict[tuple, tuple[list[str], list[str]]] = {}
         self.functions: dict[tuple, ast.FunctionDef | ast.AsyncFunctionDef] = {}
         self.routers: dict[tuple, dict] = {}
+        self._prefix_cache: dict[tuple, list[str]] = {}
         self._build()
         # Functions that check credentials in their own body, so a route that calls one is guarded.
         # Calls are matched by name, so a name counts only if every function with it does auth.
@@ -517,7 +525,10 @@ class _Symbols:
                 if scope == ():
                     self.consts.setdefault((rel, (), name), value)
             for scope, node in info.functions:
-                self.functions.setdefault((rel, scope, node.name), node)
+                # A method is keyed by its class, so it cannot be mistaken for a module function.
+                owner = info.enclosing_class.get(id(node))
+                key_scope = (owner,) if owner is not None else scope
+                self.functions.setdefault((rel, key_scope, node.name), node)
         for (rel, _, name), value in list(self.consts.items()):
             if isinstance(value, ast.Subscript) and _last_name(value.value) == "Annotated":
                 self.aliases[(rel, (), name)] = (
@@ -568,7 +579,11 @@ class _Symbols:
         """
         if _is_self_attribute(expr):
             key = (rel, (owner,), f"self.{expr.attr}")
-            return key if owner is not None and key in table else None
+            if owner is not None and key in table:
+                return key
+            # self.handler names a method of the class, which the function table keys by class.
+            method = (rel, (owner,), expr.attr)
+            return method if owner is not None and method in table else None
         if isinstance(expr, ast.Name):
             for depth in range(len(scope), -1, -1):
                 key = (rel, scope[:depth], expr.id)
@@ -690,6 +705,10 @@ class _Symbols:
             return None
         if len(candidates) == 1:
             return candidates[0]
+        # An import that names a file's full module path (app.routers.items) is that file.
+        exact = [rel for rel in candidates if _module_name(rel) == module]
+        if len(exact) == 1:
+            return exact[0]
         # The deepest folder shared with the importer holds the nearest candidates. Two of them
         # at that depth tie, and a tie is not guessed.
         folders = importer.split("/")[:-1]
@@ -715,21 +734,32 @@ class _Symbols:
         names, _ = _function_dependencies(init, rel, self)
         return any(_is_auth(n, set()) for n in names) or _raises_denial(init)
 
+    def lines_for(self, function, default):
+        """The source lines of the file a function is defined in, or default if unknown."""
+        if function is None:
+            return default
+        rel = self.function_file.get(id(function))
+        return self.sources.get(rel, default) if rel is not None else default
+
     def prefixes(self, key, seen=None) -> list[str]:
         """Every URL prefix a router's routes can be mounted under, from its own prefix and
         each include_router call up the chain. A router with no mount has just its own prefix.
         """
+        # Cached per router, so a router reached by two include paths (a diamond) keeps the
+        # prefixes of every path. `seen` holds the routers on the current path, to stop cycles.
+        if key in self._prefix_cache:
+            return self._prefix_cache[key]
         seen = set() if seen is None else seen
-        if key in seen:
-            return [self.routers[key]["prefix"]]
-        seen.add(key)
         info = self.routers[key]
-        if not info["parents"]:
+        if key in seen or not info["parents"]:
             return [info["prefix"]]
+        seen.add(key)
         out = []
         for parent, _added, mount in info["parents"]:
             bases = self.prefixes(parent, seen) if parent is not None else [""]
             out += [base + mount + info["prefix"] for base in bases]
+        seen.discard(key)
+        self._prefix_cache[key] = out
         return out
 
     def _star_key(self, name, rel, table):
@@ -826,7 +856,8 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                 items.append(
                     _item(
                         rel, method, path, node.lineno, names, types, dec, rate_decorator,
-                        context, extra_auth, node, lines, symbols.auth_helpers,
+                        context, extra_auth, node, symbols.lines_for(node, lines),
+                        symbols.auth_helpers,
                         dependency_helpers=symbols.dependency_helpers,
                         mounts=symbols.prefixes(key),
                         span=[min(d.lineno for d in node.decorator_list), node.lineno],
@@ -840,7 +871,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
         names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(call, rel)
         types: list[str] = []
         endpoint = call.args[1] if len(call.args) > 1 else _keyword(call, "endpoint")
-        function = _function_named(endpoint, rel, scope, symbols)
+        function = _function_named(endpoint, rel, scope, symbols, owner)
         if function is not None:
             more_names, types = _function_dependencies(function, rel, symbols)
             names += more_names
@@ -855,7 +886,12 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
         if call.func.attr == "add_websocket_route":
             methods = ["WEBSOCKET"]
         else:
-            methods = _methods(_keyword(call, "methods"), default=["GET"])
+            # add_route(path, endpoint, methods) takes methods positionally as well.
+            if call.func.attr == "add_route" and len(call.args) > 2:
+                methods_expr = call.args[2]
+            else:
+                methods_expr = _keyword(call, "methods")
+            methods = _methods(methods_expr, default=["GET"])
         for method in methods:
             items.append(
                 _item(
@@ -870,7 +906,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     context,
                     extra_auth,
                     function,
-                    lines,
+                    symbols.lines_for(function, lines),
                     symbols.auth_helpers,
                     dependency_helpers=symbols.dependency_helpers,
                     mounts=symbols.prefixes(key),
@@ -885,7 +921,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
         if key is None or not call.args:
             continue
         endpoint = call.args[0]
-        function = _function_named(endpoint, rel, scope, symbols)
+        function = _function_named(endpoint, rel, scope, symbols, owner)
         names = symbols.effective_dependencies(key) + symbols.keyword_dependencies(call.func, rel)
         types: list[str] = []
         if function is not None:
@@ -912,7 +948,7 @@ def _routes_in_file(rel, info, symbols, extra_auth, lines):
                     context,
                     extra_auth,
                     function,
-                    lines,
+                    symbols.lines_for(function, lines),
                     symbols.auth_helpers,
                     dependency_helpers=symbols.dependency_helpers,
                     mounts=symbols.prefixes(key),
@@ -1191,10 +1227,10 @@ def _annotation(expr):
     return expr
 
 
-def _function_named(expr, rel, scope, symbols):
+def _function_named(expr, rel, scope, symbols, owner=None):
     if expr is None or not _is_name(expr):
         return None
-    key = symbols.find(expr, rel, scope, symbols.functions)
+    key = symbols.find(expr, rel, scope, symbols.functions, owner)
     return symbols.functions[key] if key is not None else None
 
 

@@ -55,6 +55,8 @@ def _load(yaml, path: Path):
         UnicodeDecodeError,
         yaml.YAMLError,
         ValueError,
+        # PyYAML fails with AttributeError on a malformed !!timestamp.
+        AttributeError,
         RecursionError,
         MemoryError,
     ) as error:
@@ -236,8 +238,21 @@ def _has_real_timeout(job) -> bool:
     if "timeout-minutes" not in job:
         return False
     value = job["timeout-minutes"]
-    is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
-    return not (is_number and value <= 0)
+    # An empty value (null) sets nothing, so it is not a limit.
+    if value is None or value == "":
+        return False
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value > 0
+    text = str(value).strip()
+    # An expression is decided when the workflow runs, so it is taken as a limit.
+    if "${{" in text:
+        return True
+    try:
+        return float(text) > 0
+    except ValueError:
+        return True
 
 
 def _only_reusable(data) -> bool:
@@ -331,7 +346,8 @@ def _judgeable(uses: str) -> bool:
     A local action lives in this repository, so there is nothing to pin. A reference such
     as actions/checkout@${{ inputs.ref }} is decided at run time and cannot be judged here.
     """
-    return not _is_local(uses) and "${{" not in uses
+    # A blank reference names nothing, so there is nothing to judge.
+    return bool(uses.strip()) and not _is_local(uses) and "${{" not in uses
 
 
 def _is_local(uses: str) -> bool:

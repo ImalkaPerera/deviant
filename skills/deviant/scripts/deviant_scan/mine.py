@@ -570,7 +570,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.path and args.repo and args.path != args.repo:
         parser.error("give the folder once: as a path or with --repo, not both")
-    repo = args.repo or args.path or "."
+    # An explicit empty --repo is an error, not a request to scan the current folder.
+    if args.repo == "" or args.path == "":
+        parser.error("the folder to scan cannot be empty")
+    repo = args.repo if args.repo is not None else (args.path if args.path is not None else ".")
     # Commit subjects and author names can hold any character. A Windows console that
     # cannot print them must not crash the scan, so replace what it cannot show.
     for stream in (sys.stdout, sys.stderr):
