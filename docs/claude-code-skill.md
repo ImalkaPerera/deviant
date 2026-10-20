@@ -81,5 +81,5 @@ The scenarios are in [`tests/skill/`](../tests/skill/README.md) so you can repea
 
 - It is as good as the model running it, and it can be wrong. Treat a label as a lead, and read
   the proof it gives.
-- It judges ten exceptions per run.
+- It judges up to 25 exceptions or leads per run, and says how many were left.
 - Deviant only checks FastAPI routes and GitHub Actions workflows so far.

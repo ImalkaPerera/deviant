@@ -6,12 +6,14 @@ is that Deviant does not yet beat asking Claude alone at finding bugs.
 | Page | What it measures | Headline |
 |---|---|---|
 | [detector-only.md](detector-only.md) | The scan alone (no AI) on bugs planted in ten real repos | 2 of 9 removed FastAPI auth checks reported, 0 of 13 removed job timeouts |
-| [condition-a-claude-alone.md](condition-a-claude-alone.md) | Claude reading the code with no help, same planted bugs | 71 of 126 found (56%) |
-| [condition-b-skill.md](condition-b-skill.md) | Claude with the Deviant skill, same planted bugs | 9 of 126 (7%), then 14 of 126 (11%) with a relaxed second scan, tuned on this set |
+| [condition-a-claude-alone.md](condition-a-claude-alone.md) | Claude reading the code with no help, same planted bugs | 65 of 126 found (52%) on the v0.2.0 re-run, 71 of 126 (56%) on the first run |
+| [condition-b-skill.md](condition-b-skill.md) | Claude with the Deviant skill, same planted bugs | 15 of 126 (12%) as shipped in v0.2.0. Development runs on this same set rose to 25%, 41% and 65% after the inventory, file scope and a continue-on-error feature were added. That is tuned data |
 | [judging.md](judging.md) | Labeling a flagged route as bug or intentional, on 12 constructed cases | Skill 36 of 36 right, plain Claude 35 of 36. The cases were too easy to separate them |
 | [real-exceptions.md](real-exceptions.md) | Every exception the scan reports on 29 real repos, labeled by hand | After fixes: 14 items, 5 real gaps, 5 intentional, 3 unsure, 1 style |
 | [unseen-repos.md](unseen-repos.md) | The same hand-labeling on 15 repos the detectors had never seen | 18 items, 0 real gaps, 6 false alarms from one project (fixed afterwards) |
 | [heldout-baseline.md](heldout-baseline.md) | A second repo set for checking detector changes | Too small to guide changes yet: 3 plantable bugs, none reported |
+| [fresh-set-benchmark.md](fresh-set-benchmark.md) | Claude alone and the skill on 99 bugs planted in 19 repos the skill was never tuned on | A 45% (133 of 297), B 35% (103 of 297). The pre-registered rule is not met |
+| [fresh-set-deterministic.md](fresh-set-deterministic.md) | The scan alone, no AI, on the same 20 fresh repos | 13 strict rule exceptions in 5 repos, 111 inventory leads |
 
 ## How to read these
 

@@ -8,8 +8,9 @@ stored in this repository: PyPI trusts the workflow itself ("trusted publishing"
 
 1. **Create a PyPI account** at <https://pypi.org/account/register/> and turn on two-factor
    authentication.
-2. **Register a pending publisher.** The project does not exist on PyPI yet, so this is done
-   under your account, not under a project. Open **Your account → Publishing**, choose
+2. **Register a pending publisher** (first release only). The project did not exist on PyPI
+   yet, so this was done under the account, not under a project. For later releases, add the
+   publisher under the project's Publishing settings instead. Open **Your account → Publishing**, choose
    **GitHub**, and fill in:
 
    | Field | Value |

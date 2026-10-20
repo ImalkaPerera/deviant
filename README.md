@@ -102,7 +102,8 @@ Add `--json` for machine-readable output. Output is colored in a terminal and pl
 A pattern is only reported when the evidence is strong: a group of at least 20 similar items with
 one to three exceptions. Small projects will often show nothing, on purpose. When that finds
 nothing, the Claude Code skill scans again with looser limits (8 items) and calls what it finds a
-weak lead. The math is in [how it works](docs/how-it-works.md) and the trade-offs are in
+weak lead. It also reads an inventory of every peer group (`--inventory`) and judges the items that
+lack something most of their peers have. The math is in [how it works](docs/how-it-works.md) and the trade-offs are in
 [limits](docs/limits.md).
 
 ## What it checks
@@ -110,7 +111,7 @@ weak lead. The math is in [how it works](docs/how-it-works.md) and the trade-off
 | Check | Compares | Finds |
 |---|---|---|
 | **FastAPI routes** | each route with the others in its folder | a route missing the auth or rate limit its neighbours have (a missing response model shows with `--include-style`) |
-| **GitHub Actions** | every workflow and composite action | an action not pinned to a commit, a job with no timeout, a workflow with no permissions block |
+| **GitHub Actions** | every workflow and composite action | an action not pinned to a commit, a job with no timeout, a workflow with no permissions block, a shell step that ignores its own failure (shown with `--inventory`) |
 
 FastAPI auth is followed through routers, shared dependencies and `include_router`, so routes
 that are protected from above are not reported. See [detectors](docs/detectors.md).
@@ -148,11 +149,14 @@ We publish what Deviant got wrong, not only what it got right.
 - **The Claude Code skill was run in real sessions** on a real bug, an intentional exception and
   a prompt-injection attempt, and handled all three.
 - **No bug confirmed by a maintainer in someone else's project yet.**
-- **Benchmarks are published, and they are not flattering.** On bugs planted in ten real repos,
-  Claude reading the code alone found 56% and Claude with the Deviant skill found 11% (tuned on
-  that same set). The scan alone found 2 of 9 removed auth checks and 0 of 13 removed timeouts.
-  On 12 constructed cases for judging, the skill and plain Claude both labeled nearly every case
-  correctly, so those cases did not separate them. See [the results](bench/results/).
+- **Benchmarks are published, and they are not flattering.** On a sealed fresh set of 99 bugs
+  planted in 19 repos the scan had never seen, Claude reading the code alone found 45% and Claude
+  with the Deviant skill found 35%. The skill is ahead on ignored step failures (76% against 51%)
+  and removed auth checks (67% against 56%), and it finds none of the inverted conditions that no
+  detector checks. On the older ten-repo set the skill was tuned up to 65% (against 52% for
+  Claude alone), but that set is tuned data. Precision is not measured. On 12 constructed cases
+  for judging, the skill and plain Claude both labeled nearly every case correctly, so those
+  cases did not separate them. See [the results](bench/results/).
 
 The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 
@@ -163,7 +167,8 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 - [x] A Claude Code skill that judges each finding: bug, intentional or unsure
 - [ ] Saved rules, and a hook that warns an AI agent the moment it breaks one
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
-- [ ] A benchmark that shows Deviant beating asking Claude alone (a first one is in `bench/results/`)
+- [ ] A benchmark that shows Deviant beating asking Claude alone (not yet: 35% against 45% on the
+      fresh set, see `bench/results/fresh-set-benchmark.md`)
 - [x] A PyPI release
 
 ## Contribute
