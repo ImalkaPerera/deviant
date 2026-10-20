@@ -43,6 +43,16 @@ Chosen by this rule, which looks at no scan output:
 - The detector's size floor is not a condition. Most projects fail that floor, and a set that
   required it would measure only the projects the scanner already suits.
 
+### Amendment 1 (2026-10-20, before any scan)
+
+The first draft of the selection returned libraries tagged `fastapi` (an ORM, a GraphQL
+library) that define no routes, so no auth bug can be planted in them. The rule now also
+requires, for the FastAPI kind, at least 10 lines in `.py` files that match the plain
+text pattern `@<name>.get(`, `.post(`, `.put(`, `.patch(` or `.delete(`. This is a text match
+counted by a script outside the scanner, and it is the only addition. The exclusion list is
+also read from the repository links in `docs/tested-on-real-projects.md`, which the first
+draft missed, so Polar, Douyin_TikTok_Download_API and WhisperLiveKit are excluded.
+
 ## Measures
 
 - **Recall** (primary): found planted and real bugs over all of them, paired by bug. The unit

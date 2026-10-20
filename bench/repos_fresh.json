@@ -1,0 +1,212 @@
+{
+ "selected_on": "2026-10-20",
+ "status": "SEALED. No detector or skill has been run on any repo in this file. It is opened only when bench/FROZEN.md names the commit under test.",
+ "rule": "bench/PREREGISTRATION.md, including Amendment 1. Chosen in star order from GitHub search results by a script that did not run the scanner. Route-decorator lines were counted by a plain text match, excluding .git, node_modules, .venv, tests and test folders.",
+ "known_limits": [
+  "fastapi/sqlmodel has its routes in docs_src tutorial examples, not in an application.",
+  "slackapi/bolt-python has its routes in adapter examples, not in its library code.",
+  "The rule did not require the detector's group-size floor, so many repos are expected to report nothing by the strict scan. That is intended."
+ ],
+ "repos": [
+  {
+   "name": "headroomlabs-ai/headroom",
+   "url": "https://github.com/headroomlabs-ai/headroom",
+   "commit": "fbf7bc3278c11975299b9bd0a2ecf200dfd25a05",
+   "kind": "fastapi",
+   "licence": "apache-2.0",
+   "stars": 76387,
+   "pushed": "2026-10-20",
+   "route_lines": 59
+  },
+  {
+   "name": "fastapi/sqlmodel",
+   "url": "https://github.com/fastapi/sqlmodel",
+   "commit": "462b59d9cd1cc3d9072735435330ef9ab6d15cbf",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 18429,
+   "pushed": "2026-10-15",
+   "route_lines": 57
+  },
+  {
+   "name": "fastapi-users/fastapi-users",
+   "url": "https://github.com/fastapi-users/fastapi-users",
+   "commit": "e9c57ff7ff2fd385bb0f6f795b524e9736b64290",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 6255,
+   "pushed": "2026-08-17",
+   "route_lines": 20
+  },
+  {
+   "name": "wassim249/fastapi-langgraph-agent-production-ready-template",
+   "url": "https://github.com/wassim249/fastapi-langgraph-agent-production-ready-template",
+   "commit": "fe052a7c6acf692c05ca0e0a50c0ff2ffba448b7",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 2711,
+   "pushed": "2026-10-17",
+   "route_lines": 13
+  },
+  {
+   "name": "BetaStreetOmnis/xhs_ai_publisher",
+   "url": "https://github.com/BetaStreetOmnis/xhs_ai_publisher",
+   "commit": "703452492aa00686b48880c29e3f1d86554fedc9",
+   "kind": "fastapi",
+   "licence": "apache-2.0",
+   "stars": 2092,
+   "pushed": "2026-10-15",
+   "route_lines": 14
+  },
+  {
+   "name": "AhmadHassan-BTed/OpenOPC-Shadow-Adapter",
+   "url": "https://github.com/AhmadHassan-BTed/OpenOPC-Shadow-Adapter",
+   "commit": "f38d1e5cfe8df7b2a41026416ff4e798a33ec4e3",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1871,
+   "pushed": "2026-08-20",
+   "route_lines": 16
+  },
+  {
+   "name": "insistence/RuoYi-FastAPI",
+   "url": "https://github.com/insistence/RuoYi-FastAPI",
+   "commit": "5b908acf2935a8f02bfdd8e4bcc3bcab0c01c6c6",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1564,
+   "pushed": "2026-10-18",
+   "route_lines": 293
+  },
+  {
+   "name": "slackapi/bolt-python",
+   "url": "https://github.com/slackapi/bolt-python",
+   "commit": "649cfc8632254559d4ad133c99b02d60f1b0d15f",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1330,
+   "pushed": "2026-10-16",
+   "route_lines": 19
+  },
+  {
+   "name": "aegra/aegra",
+   "url": "https://github.com/aegra/aegra",
+   "commit": "ca702e1e64b639bdb026a8d9ae1b2a6a09f5fc4a",
+   "kind": "fastapi",
+   "licence": "apache-2.0",
+   "stars": 1270,
+   "pushed": "2026-10-17",
+   "route_lines": 61
+  },
+  {
+   "name": "yezz123/authx",
+   "url": "https://github.com/yezz123/authx",
+   "commit": "06bdce443a6b39982de62a02d4dac159607f903c",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1202,
+   "pushed": "2026-10-19",
+   "route_lines": 73
+  },
+  {
+   "name": "developmentseed/titiler",
+   "url": "https://github.com/developmentseed/titiler",
+   "commit": "a10ff79809772dbb9929b36b6b6b2b1b4e403b8e",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1192,
+   "pushed": "2026-10-20",
+   "route_lines": 78
+  },
+  {
+   "name": "atpuxiner/fastapi-scaff",
+   "url": "https://github.com/atpuxiner/fastapi-scaff",
+   "commit": "5782fdc1435dc21b17dc9aebd72019e8804889a5",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1188,
+   "pushed": "2026-10-01",
+   "route_lines": 19
+  },
+  {
+   "name": "TheAlgorithms/Python",
+   "url": "https://github.com/TheAlgorithms/Python",
+   "commit": "6e03a48579ca212a08b36be00378f887dc41a003",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 225412,
+   "pushed": "2026-10-20",
+   "workflow_files": 8
+  },
+  {
+   "name": "github/spec-kit",
+   "url": "https://github.com/github/spec-kit",
+   "commit": "f68ffcab37a253d42a226bc9bcf4fef451efa38c",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 142003,
+   "pushed": "2026-10-19",
+   "workflow_files": 30
+  },
+  {
+   "name": "nextlevelbuilder/ui-ux-pro-max-skill",
+   "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+   "commit": "56ea9cf174ed86786187daa9de0e6247cb0747e4",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 137706,
+   "pushed": "2026-10-15",
+   "workflow_files": 6
+  },
+  {
+   "name": "Graphify-Labs/graphify",
+   "url": "https://github.com/Graphify-Labs/graphify",
+   "commit": "86c57be8204673c2a1b9849a3292a7dd3ab373d8",
+   "kind": "workflows",
+   "licence": "apache-2.0",
+   "stars": 129347,
+   "pushed": "2026-10-16",
+   "workflow_files": 5
+  },
+  {
+   "name": "browser-use/browser-use",
+   "url": "https://github.com/browser-use/browser-use",
+   "commit": "aa093a843da5edbf323c0b4145c9b6a0db3ecde8",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 118585,
+   "pushed": "2026-10-20",
+   "workflow_files": 10
+  },
+  {
+   "name": "unclecode/crawl4ai",
+   "url": "https://github.com/unclecode/crawl4ai",
+   "commit": "30165f1ee1fb61f6cce1477feed2acc5e2181e25",
+   "kind": "workflows",
+   "licence": "apache-2.0",
+   "stars": 85883,
+   "pushed": "2026-10-20",
+   "workflow_files": 7
+  },
+  {
+   "name": "bytedance/deer-flow",
+   "url": "https://github.com/bytedance/deer-flow",
+   "commit": "d288935865a7a0f2f33d8138aedaaa29997e0e7c",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 84175,
+   "pushed": "2026-10-20",
+   "workflow_files": 19
+  },
+  {
+   "name": "hiyouga/LlamaFactory",
+   "url": "https://github.com/hiyouga/LlamaFactory",
+   "commit": "438b3611d1538547876c9e7af044b022dc0e53f2",
+   "kind": "workflows",
+   "licence": "apache-2.0",
+   "stars": 75597,
+   "pushed": "2026-10-19",
+   "workflow_files": 8
+  }
+ ]
+}
