@@ -150,3 +150,65 @@ def test_candidates_carry_the_nearest_peers_that_have_the_feature():
 
     assert [e["item_id"] for e in candidate["examples"]] == ["r4", "r6"]
     assert all(e["file"] == "app.py" for e in candidate["examples"])
+
+
+def file_item(item_id, flag, file, line, group="g"):
+    return {
+        "detector": "d",
+        "peer_group": group,
+        "item_id": item_id,
+        "file": file,
+        "line": line,
+        "features": {"has_auth": flag},
+    }
+
+
+def file_group(flags, file, prefix):
+    return [file_item(f"{prefix}{i}", flag, file, i + 1) for i, flag in enumerate(flags)]
+
+
+def test_item_that_differs_from_its_neighbours_in_one_file_is_a_file_scope_lead():
+    # Across the group only 7 of 15 have the feature, so no group-wide lead exists. In a.py,
+    # four of five do.
+    items = file_group([True] * 4 + [False], "a.py", "a") + file_group(
+        [True] * 3 + [False] * 7, "b.py", "b"
+    )
+
+    survey = mine.inventory(items)
+
+    assert [(c["scope"], c.get("file")) for c in survey["candidates"]] == [("file", "a.py")]
+    candidate = survey["candidates"][0]
+    assert (candidate["n"], candidate["have"], candidate["lack"]) == (5, 4, 1)
+    assert [i["item_id"] for i in candidate["items"]] == ["a4"]
+
+
+def test_file_scope_needs_at_least_three_neighbours():
+    items = file_group([True, False], "a.py", "a") + file_group([False] * 10, "b.py", "b")
+
+    assert mine.inventory(items)["candidates"] == []
+
+
+def test_a_whole_group_lead_wins_a_tie_and_the_item_is_listed_once():
+    # Nineteen of twenty have the feature across two files. The group lead is stronger than
+    # the file lead for a.py, which would list the same item.
+    items = file_group([True] * 9 + [False], "a.py", "a") + file_group([True] * 10, "b.py", "b")
+
+    survey = mine.inventory(items)
+
+    assert [c["scope"] for c in survey["candidates"]] == ["group"]
+    assert [i["item_id"] for c in survey["candidates"] for i in c["items"]] == ["a9"]
+
+
+def test_a_stronger_file_lead_takes_the_item_and_the_group_lead_keeps_the_rest():
+    # Group-wide 12 of 20 have the feature (0.6). In a.py four of five do (0.8), so the item
+    # lacking it in a.py is listed under the file lead, not twice.
+    items = file_group([True] * 4 + [False], "a.py", "a") + file_group(
+        [True] * 8 + [False] * 7, "b.py", "b"
+    )
+
+    survey = mine.inventory(items)
+
+    listed = [(c["scope"], i["item_id"]) for c in survey["candidates"] for i in c["items"]]
+    assert listed[0] == ("file", "a4")
+    assert len([1 for _, item_id in listed if item_id == "a4"]) == 1
+    assert all(scope == "group" for scope, item_id in listed[1:])

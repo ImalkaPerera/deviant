@@ -222,6 +222,7 @@ def _unique_items(items):
 # of their peers have. It is not a rule: it does not apply the size floor or the confidence
 # bound, so what it lists are leads to read, not findings.
 INVENTORY_MIN_GROUP = 4
+INVENTORY_MIN_LOCAL_GROUP = 3
 INVENTORY_MIN_SHARE = 0.6
 INVENTORY_MAX_PER_FEATURE = 8
 INVENTORY_LIMIT = 60
@@ -238,14 +239,72 @@ def _peer_examples(members, feature, lacking, count=2):
     return [{"item_id": m["item_id"], "file": m["file"], "line": m["line"]} for m in having[:count]]
 
 
+def _group_candidates(members, detector, peer, requirements, min_group, scope, path=None):
+    """Leads for one set of peers: the items that lack a feature most of the set has."""
+    n = len(members)
+    if n < min_group:
+        return []
+    found = []
+    for feature in requirements:
+        have = sum(1 for m in members if _has(m, feature))
+        lacking = n - have
+        share = have / n
+        if share < INVENTORY_MIN_SHARE or not 1 <= lacking <= INVENTORY_MAX_PER_FEATURE:
+            continue
+        lacking_items = [m for m in members if not _has(m, feature)]
+        candidate = {
+            "detector": detector,
+            "peer_group": peer,
+            "scope": scope,
+            "feature": feature,
+            "n": n,
+            "have": have,
+            "lack": lacking,
+            "share": round(share, 3),
+            "items": [
+                {
+                    "item_id": m["item_id"],
+                    "file": m["file"],
+                    "line": m["line"],
+                    **_dependencies_of(m),
+                }
+                for m in lacking_items
+            ],
+            "examples": _peer_examples(members, feature, lacking_items[0]),
+        }
+        if path is not None:
+            candidate["file"] = path
+        found.append(candidate)
+    return found
+
+
+def _lead_key(candidate, item):
+    """What makes a lead the same lead: the item, the feature it lacks and its peer group."""
+    return (
+        candidate["detector"],
+        candidate["peer_group"],
+        candidate["feature"],
+        item["item_id"],
+        item["file"],
+        item["line"],
+    )
+
+
 def inventory(items, hide=frozenset(), limit=INVENTORY_LIMIT):
     """{"groups": [...], "candidates": [...], "truncated": n}: how every group splits.
 
     A group is every item of one detector in one peer group. For each feature an item should
     have, a candidate is the set of items that lack it when at least INVENTORY_MIN_SHARE of
-    the group has it and no more than INVENTORY_MAX_PER_FEATURE items lack it. Candidates are
-    ordered by how large the majority is, then by group size, and at most `limit` items are
-    listed in total, so the output stays small on a large project.
+    the peers have it and no more than INVENTORY_MAX_PER_FEATURE items lack it.
+
+    Peers are looked at twice: the whole group (scope "group"), and the part of the group that
+    sits in one file (scope "file"). The second catches an item that differs from its
+    neighbours in the same file even when the project as a whole is mixed, for example one job
+    with no timeout among four that have one. An item is listed once, under the candidate with
+    the larger share, then the larger group, and the whole group wins a tie.
+
+    Candidates are ordered the same way, and at most `limit` items are listed in total, so the
+    output stays small on a large project.
     """
     validate_items(items)
     groups, candidates = [], []
@@ -260,40 +319,37 @@ def inventory(items, hide=frozenset(), limit=INVENTORY_LIMIT):
             have = sum(1 for m in members if _has(m, feature))
             split[feature] = {"true": have, "false": n - have}
         groups.append({"detector": detector, "peer_group": peer, "n": n, "features": split})
-        if n < INVENTORY_MIN_GROUP:
-            continue
-        for feature, count in split.items():
-            share = count["true"] / n
-            lacking = count["false"]
-            if share < INVENTORY_MIN_SHARE or not 1 <= lacking <= INVENTORY_MAX_PER_FEATURE:
-                continue
-            lacking_items = [m for m in members if not _has(m, feature)]
-            candidates.append(
-                {
-                    "detector": detector,
-                    "peer_group": peer,
-                    "feature": feature,
-                    "n": n,
-                    "have": count["true"],
-                    "lack": lacking,
-                    "share": round(share, 3),
-                    "items": [
-                        {
-                            "item_id": m["item_id"],
-                            "file": m["file"],
-                            "line": m["line"],
-                            **_dependencies_of(m),
-                        }
-                        for m in lacking_items
-                    ],
-                    "examples": _peer_examples(members, feature, lacking_items[0]),
-                }
-            )
+        candidates += _group_candidates(
+            members, detector, peer, requirements, INVENTORY_MIN_GROUP, "group"
+        )
+        by_file = defaultdict(list)
+        for m in members:
+            by_file[m["file"]].append(m)
+        for path, local in sorted(by_file.items()):
+            if len(local) < n:  # a file that holds the whole group adds nothing
+                candidates += _group_candidates(
+                    local, detector, peer, requirements, INVENTORY_MIN_LOCAL_GROUP, "file", path
+                )
     candidates.sort(
-        key=lambda c: (-c["share"], -c["n"], c["detector"], c["peer_group"], c["feature"])
+        key=lambda c: (
+            -c["share"],
+            -c["n"],
+            c["scope"] != "group",
+            c["detector"],
+            c["peer_group"],
+            c["feature"],
+            c.get("file", ""),
+        )
     )
-    listed, truncated = [], 0
+    claimed, distinct = set(), []
     for candidate in candidates:
+        fresh = [i for i in candidate["items"] if _lead_key(candidate, i) not in claimed]
+        if not fresh:
+            continue
+        claimed.update(_lead_key(candidate, i) for i in fresh)
+        distinct.append({**candidate, "items": fresh})
+    listed, truncated = [], 0
+    for candidate in distinct:
         room = limit - sum(len(c["items"]) for c in listed)
         if room <= 0:
             truncated += len(candidate["items"])

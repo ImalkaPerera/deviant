@@ -82,7 +82,8 @@ rules.
 
 `inventory` (present because Step 1 asked for it) lists every peer group and its **leads**: for
 each feature that most of a group has, the few items that lack it. A lead has `detector`,
-`peer_group`, `feature`, `n`, `have`, `lack`, `share`, `items` (the items that lack the feature,
+`peer_group`, `scope` (`group`, or `file` for the peers in one file, with a `file` field),
+`feature`, `n`, `have`, `lack`, `share`, `items` (the items that lack the feature,
 with `file`, `line` and for a route its `dependencies`) and `examples` (the nearest peers that
 have it). Unlike a rule, a lead passed no size floor or confidence bound, so it is a place to
 look, not a finding. `truncated` counts leads that were left out to keep the output short.
