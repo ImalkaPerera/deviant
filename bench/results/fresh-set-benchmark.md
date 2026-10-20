@@ -40,11 +40,12 @@ Cost: A $6.88, B $0.79 (API-equivalent). No run errored.
 
 ## Pre-registered rule
 
-Under `bench/PREREGISTRATION.md`, a pass needs B's recall to be no more than 5 points below A's,
-with a lower bound above -5, and precision met. Recall is 10 points below, which is past the
-stop-line of -10 only at the point estimate, and the lower bound cannot be computed honestly on
-99 bugs. Precision has not been measured. So the rule is **not met**, and the result is not a
-pass.
+Under `bench/PREREGISTRATION.md`, a pass needs the recall difference (B minus A) to have a
+lower bound above -5 points and precision to be met. The stop rule is a point estimate below
+-10 points. The point estimate here is exactly -10 (35% minus 45%), which sits on that stop line.
+The lower bound has not been computed, because it needs a repo-level bootstrap that is not yet
+set up, and precision has not been measured at all. So the rule is **not met**, and the result is
+neither a pass nor a clear stop.
 
 ## Development runs on the earlier planted set (for context)
 
