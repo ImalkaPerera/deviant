@@ -43,9 +43,13 @@ the scan when the skill is installed this way.
 4. **Judges** up to 25 exceptions or leads per run: rules first, then relaxed rules, then
    inventory leads. For each it reads the code, a compliant example, the git evidence, and
    searches the tests.
-5. **Reports** a table with BUG rows first, then UNSURE, then INTENTIONAL, and says where each
-   came from (rule, relaxed scan or inventory lead) and what was not covered.
-6. **Asks** before changing anything. It never edits files unless you ask.
+5. **Reviews the code.** The scan checks only what its detectors know, so the skill also reads
+   the route files and workflow files, up to 40, and compares each handler or job with its
+   siblings: a condition the wrong way round, a check the siblings make and this one skips, a
+   failure that is swallowed. A review finding needs the same proof as any other.
+6. **Reports** a table with BUG rows first, then UNSURE, then INTENTIONAL, and says where each
+   came from (rule, relaxed scan, inventory lead or review) and what was not covered.
+7. **Asks** before changing anything. It never edits files unless you ask.
 
 The guidance for weighing the evidence is in
 [`skills/deviant/references/judging.md`](../skills/deviant/references/judging.md).
@@ -67,7 +71,8 @@ The guidance for weighing the evidence is in
 
 The scan is free and local. The judging uses model tokens, so the cost depends on the model.
 On small test projects a run cost about 15 to 30 cents, and a run with a small model on a
-single exception cost about a cent. Larger projects with more exceptions cost more.
+single exception cost about a cent. Larger projects cost more, and the code review in step 5
+reads up to 40 files, so it costs about as much as asking Claude to review the code alone.
 
 ## How it was checked
 
