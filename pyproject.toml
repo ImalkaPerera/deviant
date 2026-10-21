@@ -31,7 +31,7 @@ Source = "https://github.com/ImalkaPerera/deviant"
 deviant-scan = "deviant_scan.mine:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff==0.17.1"]
+dev = ["pytest>=8", "ruff==0.17.1", "hypothesis>=6"]
 
 [build-system]
 requires = ["setuptools>=77"]
