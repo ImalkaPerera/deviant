@@ -26,4 +26,10 @@ What Deviant does not do, so you can judge how far to trust a result.
 - **Git evidence needs real history.** In a shallow clone git blames old lines on the oldest
   commit it fetched, so the author is wrong. Deviant marks that evidence as truncated.
   Use a full clone.
+- **A note can silence a finding.** A docstring or comment that says a route is public, or
+  that it needs no auth, takes the route out of the report, because the author's note is
+  evidence that the gap is on purpose. It also means the same note, added to hide a missing
+  check, hides it from the scan. This matters most when an AI coding agent or an unreviewed
+  change adds the note. Read what a note says in a review; the scan cannot tell a true note
+  from a convenient one.
 - **Exceptions are leads, not verdicts.** Some exceptions are intentional.
