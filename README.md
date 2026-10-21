@@ -47,9 +47,8 @@ shows the git history behind it. You write no rules.
   <img src="docs/assets/demo.png" alt="Terminal output. The scan reports 48 routes, 47 of which follow the has_auth pattern. The exception is app/routes/items.py line 244, last changed by dana@example.com in the commit add csv export. The same author wrote 47 of the 47 compliant routes." width="100%">
 </p>
 
-Reading the output: `n=48 s=47 v=1` means 48 similar routes, 47 that check auth and 1 that doesn't.
-The exception is at `app/routes/items.py:244`. The last two lines are the evidence: the same
-person wrote all 47 routes that do check auth, so this looks like a slip, not a choice.
+`n=48 s=47 v=1` means 48 similar routes, 47 that check auth and 1 that doesn't. The same person
+wrote all 47 routes that do check auth, so this looks like a slip, not a choice.
 
 > **Claude with the Deviant skill found 82% of 84 planted bugs, against 70% for Claude alone,
 > at about two thirds of the cost.** Tested on 16 repos chosen and sealed before the run.
@@ -57,10 +56,8 @@ person wrote all 47 routes that do check auth, so this looks like a slip, not a 
 
 ## Highlights
 
-- **Finds the odd one out.** It learns your project's own conventions by counting, so there are
-  no rules to write.
-- **Deterministic.** The same code gives the same answer. Finding the exceptions needs no AI, no
-  API key and no network.
+- **Finds the odd one out.** It learns your project's own conventions by counting: no rules to
+  write, no AI, no API key, and the same answer every time.
 - **Evidence, not guesses.** With `--with-git`, each finding comes with git history: who changed
   it, when, why, and how many of the protected items that person wrote.
 - **A verdict with proof, inside Claude Code.** The plugin labels each finding as a bug,
@@ -70,7 +67,6 @@ person wrote all 47 routes that do check auth, so this looks like a slip, not a 
   evidence uses read-only commands. Use the latest release; see [SECURITY.md](SECURITY.md).
 - **Ready for CI.** `--json` for tools and `--fail-on-findings` to fail a job. See
   [using it in CI](docs/using-in-ci.md).
-- **Extensible.** A check is one Python file.
 
 ## Quick start
 
@@ -91,12 +87,8 @@ Code and run it on a project:
 /deviant:deviant path/to/project
 ```
 
-It labels each finding as a bug, intentional or unsure, with proof. See
-[using Deviant in Claude Code](docs/claude-code-skill.md). The plugin runs the Python on your
+See [using Deviant in Claude Code](docs/claude-code-skill.md). The plugin runs the Python on your
 path, so run `pip install PyYAML` first if you want it to check GitHub Actions workflows.
-
-Output is colored in a terminal and plain when piped (`--color never` and the `NO_COLOR` variable
-turn it off).
 
 ## How it works
 
@@ -110,11 +102,9 @@ turn it off).
    every handler and job with its siblings, for the bugs no count can see: an inverted
    condition, a swallowed failure, a check one handler skips.
 
-A pattern is only reported when the evidence is strong: a group of at least 20 similar items with
-one to three exceptions, so small projects often show nothing from the scan alone. That is why
-the skill does not stop there. It also reads an inventory of every peer group (`--inventory`),
-the items that lack something most of their peers have, and it reviews the code itself. The math
-is in [how it works](docs/how-it-works.md) and the trade-offs are in [limits](docs/limits.md).
+The scan only reports a pattern when the evidence is strong, so a small project may show nothing
+from it alone. That is why the skill also reviews the code. The details are in
+[how it works](docs/how-it-works.md) and [limits](docs/limits.md).
 
 ## What it checks
 
@@ -123,8 +113,8 @@ is in [how it works](docs/how-it-works.md) and the trade-offs are in [limits](do
 | **FastAPI routes** | each route with the others in its folder | a route missing the auth or rate limit its neighbours have (a missing response model shows with `--include-style`) |
 | **GitHub Actions** | every workflow and composite action | an action not pinned to a commit, a job with no timeout or concurrency setting, a workflow with no permissions block, a shell step that ignores its own failure (shown with `--inventory`) |
 
-FastAPI auth is followed through routers, shared dependencies and `include_router`, so routes
-that are protected from above are not reported. See [detectors](docs/detectors.md).
+Auth set on a router or a parent app counts, so routes protected from above are not reported.
+See [detectors](docs/detectors.md).
 
 ## How is this different?
 
@@ -163,30 +153,16 @@ page in [`bench/results`](bench/results/), with its limits.
 - The earlier skill, which only judged the scan's leads, lost on the first sealed set (35%
   against 55%). Reading the code itself is what turned that around.
 
-**The scan alone, with no AI**
-
-- On **35 real bugs from public fix commits**, scanned at the commit before each fix, it pointed
-  at 25: all 13 unpinned actions and all 3 missing timeouts, but only 1 of 7 missing-auth bugs
-  ([details](bench/results/real-bugs.md)).
-- On **29 real repos labeled by hand**, the looser scan reported 14 items: 5 real gaps (4 of them
-  low-severity CI hygiene), 5 intentional, 3 unsure and 1 style. The default scan found nothing
-  worth fixing ([details](bench/results/real-exceptions.md)).
-- On **15 repos the detectors had never seen**, it found no real gap, and 6 of its 18 items were
-  false alarms from one project, since fixed ([details](bench/results/unseen-repos.md)).
-
-**In the open**
-
-- 547 real projects scanned (from 577 found on GitHub), every candidate read by hand. Every
-  problem found in real results was fixed with a regression test, and the early mistakes are [listed](docs/tested-on-real-projects.md#what-the-early-versions-got-wrong).
-- No bug confirmed by a maintainer in someone else's project yet.
+**The scan alone, with no AI,** pointed at 25 of 35 real bugs taken from public fix commits
+([details](bench/results/real-bugs.md)). It has been run on 547 real projects, with every
+candidate read by hand and every false alarm written down
+([tested on real projects](docs/tested-on-real-projects.md)).
 
 ## Roadmap
 
-- [x] Count patterns and report the rare exceptions
-- [x] FastAPI and GitHub Actions checks, with git evidence
-- [x] A Claude Code skill that judges each finding and reviews the code around it
-- [x] A sealed benchmark where Claude with the skill finds more bugs than Claude alone
-- [x] A PyPI release, and a CI mode (`--fail-on-findings`)
+Done: the scan with git evidence, FastAPI and GitHub Actions checks, the Claude Code skill, a
+sealed benchmark, a PyPI release and a CI mode. Next:
+
 - [ ] False alarms labeled by hand, to show whether the skill is also more often right
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
 - [ ] SARIF output for GitHub code scanning, and a ready-made GitHub Action
@@ -225,8 +201,5 @@ find it.
 
 The idea comes from Engler et al., [*Bugs as Deviant Behavior*](https://www.cs.columbia.edu/~junfeng/09fa-e6998/papers/deviant.pdf)
 (SOSP 2001), which showed that rare exceptions to a common pattern often point to real bugs.
-Related work: [Laravel `infer-conventions`](https://laravel.com/blog/extracting-ai-rules-from-an-existing-codebase),
-[codebase-dna-guardian](https://github.com/mturac/codebase-dna-guardian),
-[Trail of Bits `semgrep-rule-creator`](https://lobehub.com/skills/trailofbits-skills-semgrep-rule-creator).
 
 Licensed under either of the [MIT license](LICENSE) or the [Apache License 2.0](LICENSE-APACHE), at your option.
