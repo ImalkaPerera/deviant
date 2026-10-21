@@ -13,6 +13,7 @@ is that Deviant does not yet beat asking Claude alone at finding bugs.
 | [unseen-repos.md](unseen-repos.md) | The same hand-labeling on 15 repos the detectors had never seen | 18 items, 0 real gaps, 6 false alarms from one project (fixed afterwards) |
 | [heldout-baseline.md](heldout-baseline.md) | A second repo set for checking detector changes | Too small to guide changes yet: 3 plantable bugs, none reported |
 | [fresh-set-benchmark.md](fresh-set-benchmark.md) | Claude alone and the skill on 99 bugs planted in 19 repos the skill was never tuned on | A 45% (133 of 297), B 35% (103 of 297). The pre-registered rule is not met |
+| [real-bugs.md](real-bugs.md) | The scan alone (no AI) on 35 real bugs from public fix commits, at the commit before each fix | 25 of 35 reported (71%), 22 of 35 before one limit was tuned. Timeouts 3 of 3, pins 13 of 13, permissions 8 of 12, auth 1 of 7 |
 | [fresh-set-deterministic.md](fresh-set-deterministic.md) | The scan alone, no AI, on the same 20 fresh repos | 13 strict rule exceptions in 5 repos, 111 inventory leads |
 
 ## How to read these

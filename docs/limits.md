@@ -26,6 +26,11 @@ What Deviant does not do, so you can judge how far to trust a result.
 - **Git evidence needs real history.** In a shallow clone git blames old lines on the oldest
   commit it fetched, so the author is wrong. Deviant marks that evidence as truncated.
   Use a full clone.
+- **A bug that every similar item shares is invisible.** Deviant finds the item that breaks a
+  pattern. If a whole router has no auth, or every workflow lacks a permissions block, there
+  is no protected sibling to compare with, so it reports nothing. Of 7 real missing-auth
+  fixes, the scan reported 1: two had no protected sibling at all, and four sat among many
+  open routes (15 open of 44), which is more exceptions than a lead lists.
 - **A note can silence a finding.** A docstring or comment that says a route is public, or
   that it needs no auth, takes the route out of the report, because the author's note is
   evidence that the gap is on purpose. It also means the same note, added to hide a missing

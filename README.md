@@ -154,7 +154,10 @@ We publish what Deviant got wrong, not only what it got right.
   with the Deviant skill found 35%. The skill is ahead on ignored step failures (76% against 51%)
   and removed auth checks (67% against 56%), and it finds none of the inverted conditions that no
   detector checks. On the older ten-repo set the skill was tuned up to 65% (against 52% for
-  Claude alone), but that set is tuned data. Precision is not measured. On 12 constructed cases
+  Claude alone), but that set is tuned data. On 35 real bugs from public fix commits the scan
+  alone, with no AI, pointed at 25 (22 before one limit was tuned): all 13 unpinned actions and
+  all 3 missing timeouts, but only 1 of 7 missing-auth bugs: two had no protected sibling to
+  compare with and four sat among many open routes. Precision is not measured. On 12 constructed cases
   for judging, the skill and plain Claude both labeled nearly every case correctly, so those
   cases did not separate them. See [the results](bench/results/).
 
