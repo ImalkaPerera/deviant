@@ -132,6 +132,43 @@ def _git(repo: str, args: list[str]) -> str | None:
     return _run_git(repo, args, _filter_overrides(repo))
 
 
+def _note_outside_git_dir(repo: str) -> None:
+    """Say on stderr when the git history comes from outside the scanned folder.
+
+    A .git file can redirect to another repository, and a legitimate worktree or submodule
+    does the same. A scanned project that redirects to someone else's repository would make the
+    report show that repository's authors and commit subjects, so the reader is told.
+    """
+    answer = _run_git(repo, ["rev-parse", "--absolute-git-dir"])
+    if not answer:
+        return
+    try:
+        inside = Path(answer.strip()).resolve().is_relative_to(Path(repo).resolve())
+    except (OSError, RuntimeError):
+        return
+    if not inside:
+        print(
+            "warning: git history comes from "
+            f"{_show_path(answer.strip())}, which is outside the scanned folder "
+            "(a worktree, a submodule, or a .git file that points elsewhere)",
+            file=sys.stderr,
+        )
+
+
+_UNSAFE_RANGES = ((0x00, 0x1F), (0x7F, 0x9F), (0x2028, 0x2029), (0x202A, 0x202E), (0x2066, 0x2069))
+_UNSAFE = re.compile("[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in _UNSAFE_RANGES) + "]")
+
+
+def _show_path(text: str) -> str:
+    """text with control and bidirectional characters replaced by visible escapes."""
+
+    def escape(match):
+        code = ord(match.group())
+        return chr(92) + (f"x{code:02x}" if code < 0x100 else f"u{code:04x}")
+
+    return _UNSAFE.sub(escape, text)
+
+
 class GitEvidence:
     """Caches git lookups for one scan, so each file is blamed and each commit read once."""
 
@@ -141,6 +178,8 @@ class GitEvidence:
         inside = _git(self.repo, ["rev-parse", "--is-inside-work-tree"])
         self.available = inside is not None and inside.strip() == "true"
         self._attr_source_ok = self.available and _attr_source_supported()
+        if self.available:
+            _note_outside_git_dir(self.repo)
         if self.available and not self._attr_source_ok:
             print(
                 "warning: git 2.40 or newer is needed for blame evidence, so it is skipped",
