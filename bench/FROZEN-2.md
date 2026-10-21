@@ -11,3 +11,5 @@ Frozen on 2026-10-21, before any repo of `bench/repos_fresh2.json` was scanned o
   repo in `repos_fresh.json` and `repos_mined.json`.
 - Planting: `bench/mutations/plant.py` as at `7c45df3` (line offsets and non-auth dependency
   fixes applied).
+- Run on 2026-10-21 at this commit. Results: `bench/results/fresh-set-2-benchmark.md`. The set
+  is now spent: any later change to the skill, scanner or detectors needs a third set.

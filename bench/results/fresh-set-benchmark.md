@@ -65,7 +65,8 @@ estimate at exactly -10, on the line; the corrected scorer moves it well past it
 
 The response is the redesign recorded in `bench/PREREGISTRATION.md` under "Second fresh set":
 the skill now reviews the route and workflow files itself after judging the leads, and it is
-tested on a second sealed set chosen before the redesign was run on it.
+tested on a second sealed set chosen before the redesign was run on it. That result is in
+`fresh-set-2-benchmark.md`: there the skill found 83% against 70% for Claude alone.
 
 ## Development runs on the earlier planted set (for context)
 
