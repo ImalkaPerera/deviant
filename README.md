@@ -190,6 +190,7 @@ No API key is needed to run any test.
 [How it works](docs/how-it-works.md) · [Claude Code skill](docs/claude-code-skill.md) ·
 [Reading the output](docs/reading-the-output.md) ·
 [Detectors](docs/detectors.md) · [Configuration](docs/configuration.md) ·
+[Using it in CI](docs/using-in-ci.md) ·
 [Limits](docs/limits.md) · [Benchmarks](bench/results/) · [Security](SECURITY.md)
 
 The idea comes from Engler et al., [*Bugs as Deviant Behavior*](https://www.cs.columbia.edu/~junfeng/09fa-e6998/papers/deviant.pdf)

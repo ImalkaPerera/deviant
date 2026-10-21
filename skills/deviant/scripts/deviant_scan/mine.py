@@ -624,6 +624,7 @@ def run(
     color=False,
     include_style=False,
     with_inventory=False,
+    fail_on_findings=False,
 ):
     if not Path(repo_root).is_dir():
         print(f"error: {repo_root} is not a directory", file=sys.stderr)
@@ -677,7 +678,8 @@ def run(
         print(("\n" if rules else "") + _hidden_note(hidden))
     if survey is not None and not as_json:
         print("\n" + _format_inventory(_printable(survey)))
-    return 0
+    # Leads from --inventory are places to look, not findings, so only rules count here.
+    return 1 if fail_on_findings and rules else 0
 
 
 # Text printed to a terminal comes from a scanned project: route paths, file names, job ids,
@@ -802,6 +804,14 @@ def main(argv=None):
             "have. These are leads to read, not findings: no size floor or confidence bound applies"
         ),
     )
+    parser.add_argument(
+        "--fail-on-findings",
+        action="store_true",
+        help=(
+            "exit with status 1 when the scan reports a finding, so a CI job can fail on it. "
+            "Leads from --inventory do not count. Without this flag the exit status is 0"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.path and args.repo and args.path != args.repo:
         parser.error("give the folder once: as a path or with --repo, not both")
@@ -827,6 +837,7 @@ def main(argv=None):
             with_git=args.with_git,
             include_style=args.include_style,
             with_inventory=args.inventory,
+            fail_on_findings=args.fail_on_findings,
             color=color,
         )
     except BrokenPipeError:
