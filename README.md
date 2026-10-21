@@ -63,8 +63,9 @@ person wrote all 47 routes that do check auth, so this looks like a slip, not a 
   API key and no network.
 - **Evidence, not guesses.** With `--with-git`, each finding comes with git history: who changed
   it, when, why, and how many of the protected items that person wrote.
-- **Makes Claude a better reviewer.** As a Claude Code skill, it hands Claude the project's
-  patterns and a review method, and Claude finds more bugs for less.
+- **A verdict with proof, inside Claude Code.** The plugin labels each finding as a bug,
+  intentional or unsure, and cites the line, test or commit that shows it. It treats the scanned
+  code as data, so a comment telling it to skip a check is reported, not obeyed.
 - **Safe to run on code you don't trust.** It reads and parses files and never runs them. Git
   evidence uses read-only commands. Use the latest release; see [SECURITY.md](SECURITY.md).
 - **Ready for CI.** `--json` for tools and `--fail-on-findings` to fail a job. See
