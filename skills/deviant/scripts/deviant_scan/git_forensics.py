@@ -9,10 +9,14 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 GIT_TIMEOUT_SECONDS = 10
+# All git lookups of one scan share this budget. Each call has its own timeout, but a
+# repository with thousands of files could still keep a scan busy for many minutes.
+GIT_BUDGET_SECONDS = 60
 # Blaming every compliant file costs one git call per file. Large rules would take
 # seconds, so only an evenly spaced sample of this many compliant items is checked.
 MAX_COMPLIANT_CHECKED = 50
@@ -46,8 +50,8 @@ _REPOSITORY_ENV = (
 )
 
 
-def _git(repo: str, args: list[str]) -> str | None:
-    """Run git in repo and return stdout, or None if it failed for any reason."""
+def _run_git(repo: str, args: list[str], extra: tuple[str, ...] = ()) -> str | None:
+    """Run git in repo with extra -c options, and return stdout or None if it failed."""
     env = {k: v for k, v in os.environ.items() if k not in _REPOSITORY_ENV}
     # Attributes come from an empty tree, so git applies no filter named by the repository's
     # .gitattributes. Blame would otherwise run a clean filter from .git/config, which is
@@ -64,6 +68,7 @@ def _git(repo: str, args: list[str]) -> str | None:
                 "core.fsmonitor=false",
                 "-c",
                 "log.showSignature=false",
+                *extra,
                 "-C",
                 repo,
                 *args,
@@ -91,6 +96,42 @@ def _git(repo: str, args: list[str]) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
+_filter_overrides_cache: dict[str, tuple[str, ...]] = {}
+
+
+def _filter_overrides(repo: str) -> tuple[str, ...]:
+    """-c options that switch off every filter named in the repository's configuration.
+
+    A clean filter is a program that git runs on a working-tree file. A scanned repository can
+    name one from .gitattributes, from .git/info/attributes or from core.attributesFile, and a
+    .git file can redirect to a config of its own. Blocking each way of naming a filter would
+    miss one, so this switches off the filters themselves: every filter the config defines gets
+    an empty clean, smudge and process command. Listing the config only reads it.
+    """
+    if repo not in _filter_overrides_cache:
+        names: set[str] = set()
+        listing = _run_git(repo, ["config", "--list", "--name-only"])
+        for key in (listing or "").splitlines():
+            if key.startswith("filter.") and key.rsplit(".", 1)[-1] in {
+                "clean",
+                "smudge",
+                "process",
+            }:
+                names.add(key[len("filter.") : key.rindex(".")])
+        options: list[str] = []
+        for name in sorted(names):
+            for setting in ("clean", "smudge", "process"):
+                options += ["-c", f"filter.{name}.{setting}="]
+            options += ["-c", f"filter.{name}.required=false"]
+        _filter_overrides_cache[repo] = tuple(options)
+    return _filter_overrides_cache[repo]
+
+
+def _git(repo: str, args: list[str]) -> str | None:
+    """Run git in repo, with the repository's own filters switched off. None if it failed."""
+    return _run_git(repo, args, _filter_overrides(repo))
+
+
 class GitEvidence:
     """Caches git lookups for one scan, so each file is blamed and each commit read once."""
 
@@ -108,6 +149,21 @@ class GitEvidence:
         self._boundary = _shallow_boundary(self.repo) if self.available else set()
         self._blame: dict[str, dict[int, dict]] = {}
         self._commits: dict[str, dict] = {}
+        self._deadline = time.monotonic() + GIT_BUDGET_SECONDS
+        self._budget_warned = False
+
+    def _over_budget(self) -> bool:
+        """True once the scan has used its git time. Says so once on stderr."""
+        if time.monotonic() <= self._deadline:
+            return False
+        if not self._budget_warned:
+            self._budget_warned = True
+            print(
+                f"warning: git evidence stopped after {GIT_BUDGET_SECONDS}s, "
+                "so the remaining exceptions have no history",
+                file=sys.stderr,
+            )
+        return True
 
     def line_author(self, rel: str, line: int, span: tuple[int, int] | None = None) -> dict | None:
         """The commit that last changed this line, or None if git cannot say.
@@ -170,13 +226,15 @@ class GitEvidence:
     def _blame_file(self, rel: str) -> dict[int, dict]:
         if rel not in self._blame:
             output = None
-            if self._attr_source_ok:
+            if self._attr_source_ok and not self._over_budget():
                 output = _git(self.repo, ["blame", "--line-porcelain", "--no-textconv", "--", rel])
             self._blame[rel] = _parse_blame(output, self._boundary) if output else {}
         return self._blame[rel]
 
     def _commit(self, sha: str) -> dict | None:
         if sha not in self._commits:
+            if self._over_budget():
+                return None
             message = _git(self.repo, ["log", "-1", "--format=%B", sha])
             files = _git(self.repo, ["show", "--name-only", "--format=", sha])
             if message is None or files is None:

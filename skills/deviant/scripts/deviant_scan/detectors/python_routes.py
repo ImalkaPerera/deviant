@@ -257,7 +257,11 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
 
 # Python 3.14 allows `except A, B:` without parentheses. Older versions reject it, so a
 # file that fails to parse is retried with the parentheses added.
-_BARE_EXCEPT = re.compile(r"^(\s*except\s+)([^()#:\n]+,[^()#:\n]+?)(\s*:)", re.MULTILINE)
+# The pattern stays on one line and each part has a length limit, because a file that fails to
+# parse can be hostile, and an open-ended match over it grows with the square of its size.
+_BARE_EXCEPT = re.compile(
+    r"^([ \t]*except[ \t]+)([^()#:\r\n]{1,200},[^()#:\r\n]{1,200}?)([ \t]*:)", re.MULTILINE
+)
 
 
 def _add_except_parentheses(match: re.Match) -> str:
@@ -1060,11 +1064,15 @@ _SAYS_PUBLIC = re.compile(
 COMMENT_LOOKBACK = 3
 # A claim of public access is void when the same sentence negates it, as in "Not open to everyone".
 _NEGATION = re.compile(r"\b(?:not|never|no longer)\b|n't\b", re.IGNORECASE)
+_NEGATION_LOOKBACK = 300
 
 
 def _says_public(text: str) -> bool:
     for match in _SAYS_PUBLIC.finditer(text):
-        sentence = re.split(r"[.;!?\n]", text[: match.start()])[-1]
+        # Only the text just before the match can negate it, so look back a fixed distance.
+        # Splitting all the text before it, for every match, grows with the square of the size.
+        window = text[max(0, match.start() - _NEGATION_LOOKBACK) : match.start()]
+        sentence = re.split(r"[.;!?\n]", window)[-1]
         if not _NEGATION.search(sentence):
             return True
     return False

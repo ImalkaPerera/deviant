@@ -635,7 +635,8 @@ def run(
             for r in everything
             if (r["rule_id"].split(".", 1)[0], r["feature"]) in hide
         )
-    survey = inventory(items, hide) if with_inventory else None
+    rules = _bounded(rules)
+    survey = _bounded(inventory(items, hide)) if with_inventory else None
     if as_json:
         payload = {"version": 1, "rules": rules, "style_hidden": hidden}
         if survey is not None:
@@ -674,6 +675,25 @@ def run(
 # them as escapes. JSON output needs nothing: json.dumps already escapes them.
 _UNSAFE_RANGES = ((0x00, 0x1F), (0x7F, 0x9F), (0x2028, 0x2029), (0x202A, 0x202E), (0x2066, 0x2069))
 _UNSAFE = re.compile("[" + "".join(f"{chr(a)}-{chr(b)}" for a, b in _UNSAFE_RANGES) + "]")
+
+
+# Strings copied from a scanned project (a route path, a dependency name, a commit subject)
+# have no length limit of their own. One very long value would be repeated in several places
+# in the output and flood whatever reads it, so every string is cut to this length.
+MAX_OUTPUT_STRING = 500
+
+
+def _bounded(value):
+    """A copy of value with every string longer than MAX_OUTPUT_STRING cut and marked."""
+    if isinstance(value, str):
+        if len(value) <= MAX_OUTPUT_STRING:
+            return value
+        return value[: MAX_OUTPUT_STRING - 3] + "..."
+    if isinstance(value, list):
+        return [_bounded(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _bounded(v) for k, v in value.items()}
+    return value
 
 
 def _printable(value):

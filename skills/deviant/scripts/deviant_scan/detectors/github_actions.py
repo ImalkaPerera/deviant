@@ -52,20 +52,26 @@ def extract(repo_root: str) -> list[dict]:
         loaded = _load(yaml, path)
         if loaded is not None:
             text, data = loaded
-            items.extend(
-                _workflow_items(
-                    path.relative_to(root).as_posix(), data, text, _step_lines(yaml, text)
+            try:
+                items.extend(
+                    _workflow_items(
+                        path.relative_to(root).as_posix(), data, text, _step_lines(yaml, text)
+                    )
                 )
-            )
+            except (RecursionError, MemoryError):
+                _skipped(path, "is too deeply nested to read")
     for path in _action_files(root):
         loaded = _load(yaml, path)
         if loaded is not None:
             text, data = loaded
-            items.extend(
-                _action_items(
-                    path.relative_to(root).as_posix(), data, text, _step_lines(yaml, text)
+            try:
+                items.extend(
+                    _action_items(
+                        path.relative_to(root).as_posix(), data, text, _step_lines(yaml, text)
+                    )
                 )
-            )
+            except (RecursionError, MemoryError):
+                _skipped(path, "is too deeply nested to read")
     return items
 
 
@@ -197,7 +203,13 @@ def _workflow_items(rel, data, text, step_lines=None):
         if not isinstance(job, dict):
             continue
         key = re.escape(str(job_id))
-        job_line = _line_of(lines, rf"^{indent}['\"]?{key}['\"]?\s*:", start=jobs_line, regex=True)
+        # The YAML position is exact and costs nothing per job. Searching the text for every
+        # job would grow with the square of the number of jobs, so it is only the fallback.
+        job_line = (step_lines or {}).get(("job", str(job_id)))
+        if job_line is None:
+            job_line = _line_of(
+                lines, rf"^{indent}['\"]?{key}['\"]?\s*:", start=jobs_line, regex=True
+            )
         if isinstance(job.get("uses"), str):
             # A call to a reusable workflow has no timeout or steps of its own,
             # but the workflow it calls should be pinned like any action.
@@ -268,6 +280,10 @@ def _has_real_timeout(job) -> bool:
     if "timeout-minutes" not in job:
         return False
     value = job["timeout-minutes"]
+    # A mapping or list is not a number or an expression, and str() on one built from shared
+    # anchors takes exponential time, so it is not read: it is no usable limit.
+    if isinstance(value, (dict, list, tuple, set)):
+        return False
     # An empty value (null) sets nothing, so it is not a limit.
     # The loader reads null as the text "null", and "~" is the same null, so both are no limit.
     if value is None or str(value).strip() in ("", "null", "~"):
@@ -398,6 +414,7 @@ def _step_lines(yaml, text) -> dict:
     if isinstance(jobs, yaml.MappingNode):
         for key, job in jobs.value:
             if isinstance(job, yaml.MappingNode) and hasattr(key, "value"):
+                positions[("job", str(key.value))] = key.start_mark.line + 1
                 record(str(key.value), child(job, "steps"))
     runs = child(root, "runs")
     if isinstance(runs, yaml.MappingNode):
@@ -428,6 +445,7 @@ def _uses_item(rel, uses, line, name):
 
 _SHOWN_CHARS = 200
 _NODE_BUDGET = 500
+_MAX_DEPTH = 12
 
 
 def _short_text(value) -> str:
@@ -439,15 +457,17 @@ def _short_text(value) -> str:
     """
     budget = [_NODE_BUDGET]
 
-    def walk(node, nested: bool) -> str:
-        if budget[0] <= 0:
+    def walk(node, nested: bool, depth: int = 0) -> str:
+        if budget[0] <= 0 or depth > _MAX_DEPTH:
             return "..."
         budget[0] -= 1
         if isinstance(node, dict):
-            inner = ", ".join(f"{walk(k, True)}: {walk(v, True)}" for k, v in node.items())
+            inner = ", ".join(
+                f"{walk(k, True, depth + 1)}: {walk(v, True, depth + 1)}" for k, v in node.items()
+            )
             return "{" + inner + "}"
         if isinstance(node, list):
-            return "[" + ", ".join(walk(v, True) for v in node) + "]"
+            return "[" + ", ".join(walk(v, True, depth + 1) for v in node) + "]"
         return repr(node) if nested else str(node)
 
     return walk(value, False)[:_SHOWN_CHARS]
