@@ -313,6 +313,12 @@ def test_a_commit_dated_past_the_year_9999_does_not_end_the_scan(tmp_path):
     git(tmp_path, "init", "-q")
     git(tmp_path, "add", "-A")
     git(tmp_path, "commit", "-q", "-m", "far", date="@999999999999 +0000")
+    stored = subprocess.run(
+        ["git", "-C", str(tmp_path), "log", "-1", "--format=%at"], capture_output=True, text=True
+    ).stdout.strip()
+    if stored != "999999999999":
+        # Git for Windows keeps commit times in 32 bits and stores 2106 instead.
+        pytest.skip(f"this git stores the far date as {stored}")
 
     rules = mine.mine(scan_items(range(1, 31), 5), repo_root=tmp_path)
 
@@ -328,6 +334,15 @@ def test_a_commit_dated_past_the_year_9999_does_not_end_the_scan(tmp_path):
 )
 def test_commit_times_that_are_not_dates_have_no_date(text, expected):
     assert gf._when(text) == expected
+
+
+def test_blame_with_a_far_future_time_is_parsed_without_a_date():
+    # The same input as above, without needing a git that can store it.
+    output = "a" * 40 + " 1 1 1\nauthor-mail <ann@example.com>\nauthor-time 999999999999\n\tx\n"
+
+    parsed = gf._parse_blame(output)[1]
+
+    assert parsed["time"] == 999999999999 and parsed["date"] is None
 
 
 def test_a_sha256_repository_gets_git_evidence(tmp_path):
