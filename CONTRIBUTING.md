@@ -115,7 +115,6 @@ so nobody duplicates it.
 |---|---|
 | SARIF output (`--format sarif`) | Show findings in GitHub code scanning |
 | An ignore file for known intentional exceptions | So accepted findings stay quiet |
-| A non-zero exit code when there are findings | So it can fail a CI job |
 | A GitHub Action and a pre-commit hook | Run it where people already work |
 | A JSON schema for the output | Stable output for other tools |
 

@@ -26,7 +26,10 @@ output. Everything runs on your machine. It reads your files and never runs your
 
 ## In Claude Code
 
-A plugin judges each exception as a bug, intentional or unsure, with proof:
+A plugin judges each exception as a bug, intentional or unsure, with proof, then reviews the
+code around it. On 84 bugs planted in 16 sealed repos, Claude with the plugin found 82% against
+70% for Claude alone, at about two thirds of the cost
+([benchmark](https://github.com/ImalkaPerera/deviant/blob/main/bench/results/fresh-set-2-benchmark.md)):
 
 ```text
 /plugin install deviant --marketplace ImalkaPerera/deviant
