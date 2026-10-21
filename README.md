@@ -23,6 +23,7 @@
 </p>
 
 <p align="center">
+  <a href="https://imalkaperera.github.io/deviant/">Website</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#what-it-checks">What it checks</a> ·
@@ -192,7 +193,8 @@ find it.
 
 ## Learn more
 
-[How it works](docs/how-it-works.md) · [Claude Code skill](docs/claude-code-skill.md) ·
+[Website](https://imalkaperera.github.io/deviant/) · [How it works](docs/how-it-works.md) ·
+[Claude Code skill](docs/claude-code-skill.md) ·
 [Reading the output](docs/reading-the-output.md) ·
 [Detectors](docs/detectors.md) · [Configuration](docs/configuration.md) ·
 [Using it in CI](docs/using-in-ci.md) ·

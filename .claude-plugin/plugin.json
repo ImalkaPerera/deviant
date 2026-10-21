@@ -6,7 +6,7 @@
     "name": "ImalkaPerera",
     "url": "https://github.com/ImalkaPerera"
   },
-  "homepage": "https://github.com/ImalkaPerera/deviant",
+  "homepage": "https://imalkaperera.github.io/deviant/",
   "repository": "https://github.com/ImalkaPerera/deviant",
   "license": "MIT OR Apache-2.0",
   "keywords": ["static-analysis", "bug-detection", "code-quality", "fastapi", "github-actions", "code-review"]
