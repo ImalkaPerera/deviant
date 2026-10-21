@@ -5,10 +5,6 @@ frozen before the first scan in `bench/FROZEN-2.md` (commit `7939fd0`): the rede
 which judges the scanner's leads and then reviews the route and workflow files itself. The
 skill, scanner and detectors were not changed after that commit.
 
-**Provisional: 57 of 60 B runs.** Three B runs (two on `LibreChat-AI/rag-api`, one on
-`shuxiachai/academic-commercialization-agent`) were still running when this page was written.
-The numbers below are updated when they finish.
-
 Planted bugs: 84 on 16 of the 20 repos (four repos got none), made with
 `bench/mutations/plant.py` as named in `FROZEN-2.md`. No repo had a route where an auth
 dependency could be removed, so the set has no auth bugs. Both arms used the same planted
@@ -20,26 +16,28 @@ and three runs per repo.
 | Kind | Bugs | A: Claude alone | B: Deviant skill |
 |---|---|---|---|
 | Ignored step failure (`continue-on-error`) | 39 | 54% (63 of 117) | **83%** (97 of 117) |
-| Inverted `if not` in a route | 37 | 94% (104 of 111) | **98%** (94 of 96) |
+| Inverted `if not` in a route | 37 | **94%** (104 of 111) | 93% (103 of 111) |
 | Job timeout removed | 8 | **38%** (9 of 24) | 25% (6 of 24) |
-| **All bug-runs** | **84** | **70%** (176 of 252) | **83%** (197 of 237) |
+| **All bug-runs** | **84** | 70% (176 of 252) | **82%** (206 of 252) |
 
-Cost: A $8.82 for 60 runs, B $4.85 for 57 runs (API-equivalent). No run errored.
+Cost: A $8.82, B $5.70 for 60 runs each (API-equivalent). No run errored.
 
 Repo-level paired bootstrap (`bench/paired_bootstrap.py`, 10,000 resamples, 16 repos):
 
 | Bugs | B minus A | 95% interval |
 |---|---|---|
-| All | +13.3 points | +4.5 to +24.0 |
-| Kinds no detector checks | +16.4 points | +7.8 to +25.7 |
+| All | +11.9 points | +1.4 to +23.6 |
+| Kinds no detector checks | +14.5 points | +2.8 to +25.5 |
 | Kinds a detector checks (timeouts, one repo) | -12.5 points | one repo, no interval |
 
 ## The pre-registered question
 
 `bench/PREREGISTRATION.md` ("Second fresh set") asked whether the skill finds more than Claude
 alone, and decided the answer before the set was chosen: yes if B minus A is above 0 with a
-repo-level paired bootstrap 95% lower bound above 0. The lower bound is +4.5 points, so on this
-set **the skill finds more planted bugs than Claude alone**, at about half the cost per run.
+repo-level paired bootstrap 95% lower bound above 0. The lower bound is +1.4 points, so on this
+set **the skill finds more planted bugs than Claude alone**, at about two thirds of the cost.
+The bound is close to 0, so the size of the gain is uncertain: anywhere from about 1 to 24
+points.
 
 ## What the numbers do and do not show
 
@@ -52,8 +50,8 @@ set **the skill finds more planted bugs than Claude alone**, at about half the c
 - **A disclosed caveat on inverted conditions.** The skill's review step names an inverted
   condition as an example of what to look for, and the planted "other" kind includes inverted
   `if not` conditions. This was written down before the run. Both arms find almost all of them
-  (94% and 98%), so this kind adds little to the gap. Without it, the gain on ignored step
-  failures alone is 29 points.
+  (94% and 93%), so this kind adds nothing to the gap. The whole gain is on ignored step
+  failures (29 points).
 - **B is behind on removed timeouts** (25% against 38%), on 8 bugs in one repo. That is too few
   to say much.
 - **Precision is not measured.** The full pass rule in `PREREGISTRATION.md` also needs

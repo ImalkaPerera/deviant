@@ -2,7 +2,7 @@
 
 What we measured, in the order it was done. Each page states its own limits. The short version
 is that the redesigned skill finds more planted bugs than asking Claude alone on a sealed set
-(83% against 70%), and precision has not been measured for either.
+(82% against 70%), and precision has not been measured for either.
 
 | Page | What it measures | Headline |
 |---|---|---|
@@ -15,7 +15,7 @@ is that the redesigned skill finds more planted bugs than asking Claude alone on
 | [heldout-baseline.md](heldout-baseline.md) | A second repo set for checking detector changes | Too small to guide changes yet: 3 plantable bugs, none reported |
 | [fresh-set-benchmark.md](fresh-set-benchmark.md) | Claude alone and the skill on 99 bugs planted in 19 repos the skill was never tuned on | A 55% (163 of 297), B 35% (103 of 297) after a scorer fix (first published as A 45%). The pre-registered stop rule is met |
 | [real-bugs.md](real-bugs.md) | The scan alone (no AI) on 35 real bugs from public fix commits, at the commit before each fix | 25 of 35 reported (71%), 22 of 35 before one limit was tuned. Timeouts 3 of 3, pins 13 of 13, permissions 8 of 12, auth 1 of 7 |
-| [fresh-set-2-benchmark.md](fresh-set-2-benchmark.md) | Claude alone and the redesigned skill (it reviews the code after judging the leads) on 84 bugs planted in 16 sealed repos | B 83% (197 of 237), A 70% (176 of 252). Paired bootstrap +13.3 points, 95% interval +4.5 to +24.0. Provisional, 57 of 60 B runs |
+| [fresh-set-2-benchmark.md](fresh-set-2-benchmark.md) | Claude alone and the redesigned skill (it reviews the code after judging the leads) on 84 bugs planted in 16 sealed repos | B 82% (206 of 252), A 70% (176 of 252). Paired bootstrap +11.9 points, 95% interval +1.4 to +23.6 |
 | [fresh-set-deterministic.md](fresh-set-deterministic.md) | The scan alone, no AI, on the same 20 fresh repos | 13 strict rule exceptions in 5 repos, 111 inventory leads |
 
 ## How to read these

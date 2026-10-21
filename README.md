@@ -150,9 +150,9 @@ We publish what Deviant got wrong, not only what it got right.
   a prompt-injection attempt, and handled all three.
 - **No bug confirmed by a maintainer in someone else's project yet.**
 - **Benchmarks are published, good and bad.** On a second sealed set of 84 bugs planted in 16
-  repos, chosen and frozen before the run, Claude with the Deviant skill found 83% and Claude
-  reading the code alone found 70%, at about half the cost (provisional, 57 of 60 skill runs;
-  the 95% interval for the gain is +4.5 to +24 points). The gain comes from the skill's review
+  repos, chosen and frozen before the run, Claude with the Deviant skill found 82% and Claude
+  reading the code alone found 70%, at about two thirds of the cost (the 95% interval for the
+  gain is +1.4 to +23.6 points, so its size is uncertain). The gain comes from the skill's review
   step more than from the scan, and precision is not measured yet, so this shows the skill
   finds more, not that it makes fewer false alarms. On the first sealed set the earlier skill,
   which only judged the scan's leads, lost: 35% against 55%. On the older ten-repo set the skill was tuned up to 65% (against 52% for
@@ -172,7 +172,7 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 - [x] A Claude Code skill that judges each finding: bug, intentional or unsure
 - [ ] Saved rules, and a hook that warns an AI agent the moment it breaks one
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
-- [x] A benchmark that shows Deviant finding more bugs than asking Claude alone (83% against
+- [x] A benchmark that shows Deviant finding more bugs than asking Claude alone (82% against
       70% on the second sealed set, see `bench/results/fresh-set-2-benchmark.md`)
 - [ ] Precision labelled by hand, to show whether it also makes fewer false alarms
 - [x] A PyPI release
