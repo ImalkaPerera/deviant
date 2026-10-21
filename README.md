@@ -44,11 +44,12 @@ Deviant counts what your code already does, picks out the rare item that breaks 
 shows the git history behind it. You write no rules.
 
 <p align="center">
-  <img src="docs/assets/demo.png" alt="Terminal output. The scan reports 48 routes, 47 of which follow the has_auth pattern. The exception is app/routes/items.py line 244, last changed by dana@example.com in the commit add csv export. The same author wrote 47 of the 47 compliant routes." width="100%">
+  <img src="docs/assets/demo-scan.gif" alt="A terminal runs deviant-scan . --with-git on a demo project. It reports that 47 of 48 routes in app/routes check auth. The exception is GET /users/export at app/routes/items.py line 88, last changed by dana@example.com in the commit add csv export, and the same author wrote 0 of the 47 routes that do check auth." width="100%">
 </p>
 
-`n=48 s=47 v=1` means 48 similar routes, 47 that check auth and 1 that doesn't. The same person
-wrote all 47 routes that do check auth, so this looks like a slip, not a choice.
+`n=48 s=47 v=1` means 48 similar routes, 47 that check auth and 1 that doesn't. The one that
+doesn't was added in a commit called *add csv export*, by someone who wrote none of the 47 that
+do. Try it on the same project: `python docs/demo/make_demo_project.py ~/deviant-demo`.
 
 > **With Deviant, Claude found 82% of planted bugs instead of 70%, for a third less.**
 > [How we measured it](#results)

@@ -38,6 +38,14 @@ To record it as a GIF without editing, [VHS](https://github.com/charmbracelet/vh
 vhs docs/demo/scan.tape   # writes docs/assets/demo-scan.gif
 ```
 
+Or render it from the real output with Pillow, which is how `docs/assets/demo-scan.gif` was made:
+
+```bash
+cd ~/deviant-demo && deviant-scan . --with-git --color always > /tmp/scan.ansi && cd -
+python docs/demo/render_gif.py /tmp/scan.ansi "deviant-scan . --with-git" "~/deviant-demo $ " \
+  docs/assets/demo-scan.gif
+```
+
 ## 3. The Claude Code clip (about 20 seconds, sped up)
 
 Install the plugin once, then open Claude Code in the demo project:
@@ -56,6 +64,7 @@ Keep the GIF under 5 MB so GitHub shows it inline. `gifski --fps 12 --width 1200
 
 ## 4. Put it in the README
 
-Save the clips as `docs/assets/demo-scan.gif` and `docs/assets/demo-skill.gif`, then replace the
-`demo.png` image near the top of `README.md` with the skill clip, and keep the terminal clip
-under "Quick start". Write alt text that says what the clip shows, as `demo.png` does now.
+The terminal clip is already at the top of `README.md` as `docs/assets/demo-scan.gif`. When the
+Claude Code clip is ready, save it as `docs/assets/demo-skill.gif`, put it at the top in place of
+the terminal clip, and move the terminal clip under "Quick start". Write alt text that says what
+the clip shows, as the current one does.
