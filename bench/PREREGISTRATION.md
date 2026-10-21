@@ -93,3 +93,25 @@ Before the first scan of the fresh set, the commit of the detectors and the skil
   25 bugs per repo and an intra-repo correlation of 0.05 (design effect 2.2), about 410.
 - Pooled precision at 80% with plus or minus 5 points: 246 labelled findings, and about twice
   that if labels cluster by repo.
+
+## Second fresh set (written 2026-10-21, before it was chosen)
+
+The first fresh set is spent: the skill was changed after its result was known. A second set
+tests the changed skill, which now also reviews the route and workflow code itself.
+
+- **Chosen by the same rule** as the first set, including Amendment 1, and taken next in star
+  order. Also excluded: every repo in `bench/repos_fresh.json` and in `bench/repos_mined.json`
+  (the repos whose history was searched for real bugs).
+- **Frozen first.** The commit of the skill, the scanner and the detectors is written to
+  `bench/FROZEN-2.md` before any repo of this set is scanned or planted.
+- **Same arms, model, prompt, runs and planting** as the first set.
+- **One more question, decided here:** does the skill find more than Claude alone? It does if
+  B minus A is above 0 with a repo-level paired bootstrap 95% lower bound above 0. If the point
+  estimate is above 0 but the bound is not, the answer is "not shown". If it is 0 or below, the
+  answer is "no".
+- **A disclosure.** The skill's review step names an inverted condition (`if user:` before a "not
+  found" error) as an example of what to look for, and the planted "other" bugs include inverted
+  `if not` conditions. The example is a real class of bug and was written for that reason, but it
+  points at a planted kind, so a gain on that kind is reported separately as well as in the total.
+- **Precision is still not measured** by this run. A recall win alone does not meet the pass rule
+  above, which also needs precision.
