@@ -50,9 +50,8 @@ shows the git history behind it. You write no rules.
 `n=48 s=47 v=1` means 48 similar routes, 47 that check auth and 1 that doesn't. The same person
 wrote all 47 routes that do check auth, so this looks like a slip, not a choice.
 
-> **Claude with the Deviant skill found 82% of 84 planted bugs, against 70% for Claude alone,
-> at about two thirds of the cost.** Tested on 16 repos chosen and sealed before the run.
-> [How it was measured, and what it does not show yet.](#results)
+> **With Deviant, Claude found 82% of planted bugs instead of 70%, for a third less.**
+> [How we measured it](#results)
 
 ## Highlights
 
