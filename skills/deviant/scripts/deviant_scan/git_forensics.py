@@ -30,11 +30,17 @@ INTENT_WORDS = (
     "intentional",
     "todo",
 )
-UNCOMMITTED = "0" * 40
-# The object id of git's empty tree. Used as an attribute source, it names no filters.
-_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+# Object ids are 40 hex digits in a SHA-1 repository and 64 in a SHA-256 one.
+_SHA = re.compile(r"^([0-9a-f]{64}|[0-9a-f]{40}) \d+ (\d+)")
+# The object id of git's empty tree, per hash. Used as an attribute source, it names no filters.
+_EMPTY_TREES = {
+    "sha1": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "sha256": "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321",
+}
 COMMENT_LOOKBACK = 3
-_SHA = re.compile(r"^([0-9a-f]{40}) \d+ (\d+)")
+# Python and git count lines at \n, \r\n and \r. str.splitlines() also breaks at a form feed
+# and other separators, which would read the comments from the wrong lines.
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
 _warned_timeouts: set[str] = set()
 
 
@@ -50,13 +56,28 @@ _REPOSITORY_ENV = (
 )
 
 
-def _run_git(repo: str, args: list[str], extra: tuple[str, ...] = ()) -> str | None:
+_object_formats: dict[str, str] = {}
+
+
+def _empty_tree(repo: str) -> str:
+    """The empty tree's id in this repository's hash. A SHA-1 id is refused by a SHA-256 one."""
+    if repo not in _object_formats:
+        answer = _run_git(repo, ["rev-parse", "--show-object-format"], attr_source=False)
+        _object_formats[repo] = (answer or "").strip()
+    return _EMPTY_TREES.get(_object_formats[repo], _EMPTY_TREES["sha1"])
+
+
+def _run_git(
+    repo: str, args: list[str], extra: tuple[str, ...] = (), attr_source: bool = True
+) -> str | None:
     """Run git in repo with extra -c options, and return stdout or None if it failed."""
     env = {k: v for k, v in os.environ.items() if k not in _REPOSITORY_ENV}
     # Attributes come from an empty tree, so git applies no filter named by the repository's
     # .gitattributes. Blame would otherwise run a clean filter from .git/config, which is
-    # code from the scanned repository. GIT_ATTR_SOURCE needs git 2.40 or newer.
-    env["GIT_ATTR_SOURCE"] = _EMPTY_TREE
+    # code from the scanned repository. GIT_ATTR_SOURCE needs git 2.40 or newer. Only the
+    # lookup of the hash itself runs without it; rev-parse reads no attributes.
+    if attr_source:
+        env["GIT_ATTR_SOURCE"] = _empty_tree(repo)
     try:
         result = subprocess.run(
             # The scanned repository is untrusted input. A crafted .git/config can name a
@@ -310,7 +331,8 @@ class GitEvidence:
 
     def _nearby_comments(self, rel: str, line: int) -> str:
         try:
-            lines = (Path(self.repo) / rel).read_text(encoding="utf-8").splitlines()
+            text = (Path(self.repo) / rel).read_text(encoding="utf-8")
+            lines = _LINE_BREAK.split(text)
         except (OSError, UnicodeDecodeError):
             return ""
         start = max(line - 1 - COMMENT_LOOKBACK, 0)
@@ -359,7 +381,7 @@ def _parse_blame(output: str, boundary: set[str] = frozenset()) -> dict[int, dic
         if match:
             sha = match.group(1)
             current = {
-                "commit": None if sha == UNCOMMITTED else sha,
+                "commit": None if not sha.strip("0") else sha,
                 "boundary": sha in boundary,
                 "email": "",
                 "date": None,
@@ -372,12 +394,26 @@ def _parse_blame(output: str, boundary: set[str] = frozenset()) -> dict[int, dic
         elif raw.startswith("author-mail "):
             current["email"] = raw[len("author-mail ") :].strip().strip("<>")
         elif raw.startswith("author-time "):
-            stamp = int(raw.split()[1])
-            current["time"] = stamp
-            current["date"] = datetime.fromtimestamp(stamp, timezone.utc).date().isoformat()
+            current["time"], current["date"] = _when(raw[len("author-time ") :])
         elif raw.startswith("summary "):
             current["subject"] = raw[len("summary ") :]
     return result
+
+
+def _when(text: str) -> tuple[int, str | None]:
+    """(seconds, ISO date) of a commit time, or (0, None) for one that is not a usable date.
+
+    A commit can carry any number as its time. One past the year 9999, or before the year 1,
+    has no date, and must not end the scan.
+    """
+    try:
+        stamp = int(text.strip())
+        return stamp, datetime.fromtimestamp(stamp, timezone.utc).date().isoformat()
+    except (ValueError, OverflowError, OSError):
+        try:
+            return int(text.strip()), None
+        except ValueError:
+            return 0, None
 
 
 def _evenly_spaced(items: list, limit: int) -> list:

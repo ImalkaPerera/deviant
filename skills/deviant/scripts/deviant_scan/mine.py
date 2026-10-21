@@ -614,7 +614,9 @@ def _format_text(rules, color=False):
                     lines.append(f"    {c.dim('last changed:')} uncommitted changes")
                 else:
                     who = f" by {git['author']}" if git["author"] else ""
-                    lines.append(f"    {c.dim('last changed:')} {git['commit']} {git['date']}{who}")
+                    # A commit can carry a time with no calendar date (past the year 9999).
+                    when = f" {git['date']}" if git["date"] else ""
+                    lines.append(f"    {c.dim('last changed:')} {git['commit']}{when}{who}")
                 lines.append(f"    {c.dim('commit:')} {git['subject']}")
                 wrote = c.green(git["author_followed_rule_elsewhere"])
                 checked = git["compliant_checked"]
