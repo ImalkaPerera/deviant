@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ImalkaPerera/deviant"
+Homepage = "https://imalkaperera.github.io/deviant/"
 Documentation = "https://github.com/ImalkaPerera/deviant/tree/main/docs"
 Issues = "https://github.com/ImalkaPerera/deviant/issues"
 Source = "https://github.com/ImalkaPerera/deviant"
