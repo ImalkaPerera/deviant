@@ -80,6 +80,9 @@ def _load(yaml, path: Path):
     try:
         # utf-8-sig drops a byte order mark, which editors on Windows often add.
         text = path.read_text(encoding="utf-8-sig")
+        if _merged_keys(yaml, yaml.compose(text, Loader=_workflow_loader(yaml))) > MAX_MERGED_KEYS:
+            _skipped(path, f"merges more than {MAX_MERGED_KEYS} keys (<<:)")
+            return None
         data = yaml.load(text, Loader=_workflow_loader(yaml))
     except (
         OSError,
@@ -98,6 +101,55 @@ def _load(yaml, path: Path):
         _skipped(path, "is not a YAML mapping")
         return None
     return (text, data)
+
+
+# Merge keys (`<<: *base`) copy the keys of one mapping into another. Nested merges multiply,
+# so a file of a few hundred bytes can ask for billions of keys, and loading it would not end.
+# No real workflow comes near this limit.
+MAX_MERGED_KEYS = 100_000
+
+
+def _merged_keys(yaml, root) -> int:
+    """How many keys loading the composed document would build, counting what merges copy in.
+
+    Each mapping is counted once, as the loader builds each one once, and its merged size is
+    remembered, so this takes time in proportion to the file, however much the merges expand.
+    """
+    if root is None:
+        return 0
+    sizes: dict[int, int] = {}
+
+    def merged_size(node, depth=0) -> int:
+        if id(node) in sizes:
+            return sizes[id(node)]
+        if depth > _MAX_DEPTH:
+            return MAX_MERGED_KEYS + 1  # a chain of merges this long is not a workflow
+        total = 0
+        for key, value in node.value:
+            if getattr(key, "tag", "") == "tag:yaml.org,2002:merge":
+                sources = value.value if isinstance(value, yaml.SequenceNode) else [value]
+                total += sum(
+                    merged_size(s, depth + 1) for s in sources if isinstance(s, yaml.MappingNode)
+                )
+            else:
+                total += 1
+            if total > MAX_MERGED_KEYS:
+                break
+        sizes[id(node)] = total
+        return total
+
+    total, seen, stack = 0, set(), [root]
+    while stack and total <= MAX_MERGED_KEYS:
+        node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if isinstance(node, yaml.MappingNode):
+            total += merged_size(node)
+            stack.extend(part for pair in node.value for part in pair)
+        elif isinstance(node, yaml.SequenceNode):
+            stack.extend(node.value)
+    return total
 
 
 def _workflow_loader(yaml):
@@ -218,7 +270,9 @@ def _workflow_items(rel, data, text, step_lines=None):
                 items.append(_uses_item(rel, job["uses"], line, job.get("name")))
             continue
         items.append(_job_item(rel, data, str(job_id), job, job_line))
-        items.extend(_step_items(rel, job.get("steps"), lines, job_line))
+        items.extend(
+            _step_items(rel, job.get("steps"), lines, job_line, step_lines, ("job", job_index))
+        )
         items.extend(
             _run_step_items(
                 rel, job.get("steps"), lines, job_line, str(job_id), step_lines, ("job", job_index)
@@ -234,9 +288,9 @@ def _action_items(rel, data, text, step_lines=None):
         return []
     lines = text.splitlines()
     steps_line = _line_of(lines, r"^\s+['\"]?steps['\"]?\s*:", regex=True)
-    return _step_items(rel, runs.get("steps"), lines, steps_line) + _run_step_items(
-        rel, runs.get("steps"), lines, steps_line, "runs", step_lines
-    )
+    return _step_items(
+        rel, runs.get("steps"), lines, steps_line, step_lines, "runs"
+    ) + _run_step_items(rel, runs.get("steps"), lines, steps_line, "runs", step_lines)
 
 
 def _workflow_item(rel, data, jobs):
@@ -332,17 +386,22 @@ def _only_gathers_results(job) -> bool:
     )
 
 
-def _step_items(rel, steps, lines, start_line):
+def _step_items(rel, steps, lines, start_line, step_lines=None, position=None):
     items = []
     if not isinstance(steps, list):
         return items
     cursor = start_line - 1  # search forward so repeated steps get their own lines
-    for step in steps:
+    for index, step in enumerate(steps):
         if not isinstance(step, dict) or not isinstance(step.get("uses"), str):
             continue
         uses = step["uses"].strip()
         if not _judgeable(uses):
             continue
+        # Search from where the step starts, when the YAML says, so an earlier step that
+        # mentions the same action in its text is not taken for this one.
+        step_start = (step_lines or {}).get((position, index))
+        if step_start is not None:
+            cursor = max(cursor, step_start - 1)
         line = _line_of(lines, uses, start=cursor)
         cursor = line
         items.append(_uses_item(rel, uses, line, step.get("name")))
@@ -459,7 +518,11 @@ def _continues_on_error(step) -> bool:
     value = step.get("continue-on-error")
     if isinstance(value, bool):
         return value
-    return isinstance(value, str) and value.strip().lower() in ("true", "${{ true }}")
+    return isinstance(value, str) and bool(_TRUE.fullmatch(value.strip()))
+
+
+# `true`, or an expression that is only the literal true: `${{ true }}`, `${{true}}`.
+_TRUE = re.compile(r"true|\$\{\{\s*true\s*\}\}", re.IGNORECASE)
 
 
 def _uses_item(rel, uses, line, name):

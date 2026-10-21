@@ -23,6 +23,10 @@ What Deviant does not do, so you can judge how far to trust a result.
   read on older versions too, but other new syntax cannot be. A file that cannot be parsed
   is reported on stderr, because it may hide auth helpers that other files import. Run
   Deviant with the same or a newer Python than your project.
+- **Some files are skipped to keep a scan bounded.** A workflow whose merge keys (`<<:`) would
+  expand to more than 100,000 keys, or a Python file over 1 MB, is skipped with a message on
+  stderr. A router mounted under more than 64 different prefixes is checked against the first
+  63, and never counted as public because of the rest.
 - **Git evidence needs real history.** In a shallow clone git blames old lines on the oldest
   commit it fetched, so the author is wrong. Deviant marks that evidence as truncated.
   Use a full clone.

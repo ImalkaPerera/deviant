@@ -137,6 +137,7 @@ def _show(text) -> str:
 
 MAX_BYTES = 1_000_000
 MAX_FOLLOW_DEPTH = 5
+MAX_MOUNTS = 64
 SKIP_DIRS = {
     ".git",
     ".venv",
@@ -165,7 +166,15 @@ def extract(repo_root: str) -> list[dict]:
     symbols = _Symbols(trees, found, sources)
     items = []
     for rel, info in found.items():
-        items.extend(_routes_in_file(rel, info, symbols, extra_auth, sources[rel]))
+        try:
+            items.extend(_routes_in_file(rel, info, symbols, extra_auth, sources[rel]))
+        except Exception as error:
+            # One file that trips the detector must not drop the routes of every other file.
+            print(
+                f"python_routes: {_show(rel)} could not be read for routes "
+                f"({type(error).__name__}) and was skipped",
+                file=sys.stderr,
+            )
     return items
 
 
@@ -190,13 +199,34 @@ def _extra_auth_words(root: Path) -> set[str]:
     """Words the user adds in .deviant/config.json under "auth_words"."""
     path = root / ".deviant" / "config.json"
     try:
-        if path.is_symlink() or not _inside(path, root) or path.stat().st_size > MAX_BYTES:
+        if not path.exists():
             return set()
-        config = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        if path.is_symlink() or not _inside(path, root) or path.stat().st_size > MAX_BYTES:
+            _config_ignored("is a link, outside the folder, or too large")
+            return set()
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
+    except OSError:
+        _config_ignored("could not be read")
         return set()
-    words = config.get("auth_words", []) if isinstance(config, dict) else []
+    except ValueError:
+        _config_ignored("is not valid JSON")
+        return set()
+    words = config.get("auth_words", []) if isinstance(config, dict) else None
+    # A single word written as a string, not a list, would otherwise be read letter by letter.
+    if isinstance(words, str):
+        words = [words]
+    if not isinstance(words, list):
+        _config_ignored('needs "auth_words" to be a list of names')
+        return set()
     return {_normalise(w) for w in words if isinstance(w, str) and w.strip()}
+
+
+def _config_ignored(reason: str) -> None:
+    """Say on stderr that the auth words were not used, because a route can then look unguarded."""
+    print(
+        f"python_routes: .deviant/config.json {reason}, so its auth_words are not used",
+        file=sys.stderr,
+    )
 
 
 # --- reading files ------------------------------------------------------------------------
@@ -276,7 +306,7 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
             tree = _parse(source, rel)
             if tree is not None:
                 trees[rel] = tree
-                sources[rel] = source.decode("utf-8", errors="replace").splitlines()
+                sources[rel] = _source_lines(source.decode("utf-8", errors="replace"))
             elif not _looks_like_template(source):
                 failed.append(rel)
             elif b"APIRouter" in source or b"FastAPI" in source:
@@ -343,6 +373,17 @@ def _parse(source: bytes, filename: str) -> ast.Module | None:
         return ast.parse(patched, filename=filename)
     except (SyntaxError, ValueError, RecursionError, MemoryError):
         return None
+
+
+# Python counts lines at \n, \r\n and \r only. str.splitlines() also breaks at a form feed,
+# \x1c to \x1e, \x85 and \u2028, which would shift every line after one of them, so a
+# comment above a route would be read from the wrong line.
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def _source_lines(text: str) -> list[str]:
+    """The lines of a source file, numbered as the syntax tree numbers them."""
+    return _LINE_BREAK.split(text)
 
 
 def _looks_like_template(source: bytes) -> bool:
@@ -842,6 +883,13 @@ class _Symbols:
         for parent, _added, mount in info["parents"]:
             bases = self.prefixes(parent, seen) if parent is not None else [""]
             out += [base + mount + info["prefix"] for base in bases]
+        # A router included twice at each level of a chain has twice as many mounts per level.
+        # Distinct mounts are kept, up to a limit, so a crafted chain cannot take exponential time.
+        # When some are dropped, an empty mount stands for them: it is not public, so a route
+        # is never taken as public because of the mounts that were not looked at.
+        out = list(dict.fromkeys(out))
+        if len(out) > MAX_MOUNTS:
+            out = out[: MAX_MOUNTS - 1] + [""]
         seen.discard(key)
         self._prefix_cache[key] = out
         return out
@@ -1460,8 +1508,8 @@ def _nested_annotations(expr) -> list[ast.expr]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             try:
                 found.append(ast.parse(node.value, mode="eval").body)
-            except SyntaxError:
-                pass
+            except (SyntaxError, ValueError, RecursionError, MemoryError):
+                pass  # a string that is not an expression, such as a description
     return found
 
 
