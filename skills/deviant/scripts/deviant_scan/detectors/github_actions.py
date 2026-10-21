@@ -199,13 +199,13 @@ def _workflow_items(rel, data, text, step_lines=None):
     # Job ids sit at one indent. Matching only that indent keeps a nested key with the same
     # name, such as a matrix variable, from being taken for the job.
     indent = _first_child_indent(lines, jobs_line)
-    for job_id, job in jobs.items():
+    for job_index, (job_id, job) in enumerate(jobs.items()):
         if not isinstance(job, dict):
             continue
         key = re.escape(str(job_id))
         # The YAML position is exact and costs nothing per job. Searching the text for every
         # job would grow with the square of the number of jobs, so it is only the fallback.
-        job_line = (step_lines or {}).get(("job", str(job_id)))
+        job_line = (step_lines or {}).get(("job", job_index))
         if job_line is None:
             job_line = _line_of(
                 lines, rf"^{indent}['\"]?{key}['\"]?\s*:", start=jobs_line, regex=True
@@ -220,7 +220,9 @@ def _workflow_items(rel, data, text, step_lines=None):
         items.append(_job_item(rel, data, str(job_id), job, job_line))
         items.extend(_step_items(rel, job.get("steps"), lines, job_line))
         items.extend(
-            _run_step_items(rel, job.get("steps"), lines, job_line, str(job_id), step_lines)
+            _run_step_items(
+                rel, job.get("steps"), lines, job_line, str(job_id), step_lines, ("job", job_index)
+            )
         )
     return items
 
@@ -347,7 +349,7 @@ def _step_items(rel, steps, lines, start_line):
     return items
 
 
-def _run_step_items(rel, steps, lines, start_line, owner="", step_lines=None):
+def _run_step_items(rel, steps, lines, start_line, owner="", step_lines=None, position=None):
     """One item per shell step (`run:`), for whether it lets its failure pass.
 
     A step with continue-on-error: true ignores its own failure, so it is reported as lacking
@@ -367,7 +369,8 @@ def _run_step_items(rel, steps, lines, start_line, owner="", step_lines=None):
         first = next((ln.strip() for ln in step["run"].splitlines() if ln.strip()), "")
         if not first:
             continue
-        line = (step_lines or {}).get((owner, index))
+        # owner names the step in its id; position finds it in step_lines.
+        line = (step_lines or {}).get((position if position is not None else owner, index))
         if line is None:
             line = _line_of(lines, first, start=cursor)
         cursor = line
@@ -386,10 +389,17 @@ def _run_step_items(rel, steps, lines, start_line, owner="", step_lines=None):
 
 
 def _step_lines(yaml, text) -> dict:
-    """{(job id or "runs", step index): line} for every step, from the YAML node positions.
+    """Line numbers of jobs and steps, from the YAML node positions.
 
-    Reading positions from the parsed nodes is exact for folded blocks, escaped strings and
-    aliases, where searching the source text for a step's first line is not.
+    Keys: ("job", i) for the i-th job, (("job", i), j) for the j-th step of that job, and
+    ("runs", j) for the j-th step of a composite action. Jobs are counted in the order the
+    loaded mapping holds them, which is how the caller walks them, so a job's position is found
+    even when its key does not read back as the same text (a numeric key such as `010`).
+
+    Reading positions from the nodes is exact for folded blocks, escaped strings and aliases,
+    where searching the source text is not. The nodes are read as the loader reads them: a merge
+    key (`<<: *base`) brings in the keys of the mapping it names, and when a key appears twice
+    the later one wins.
     """
     positions = {}
     try:
@@ -399,10 +409,34 @@ def _step_lines(yaml, text) -> dict:
     if not isinstance(root, yaml.MappingNode):
         return positions
 
-    def child(node, key):
-        for k, v in node.value:
-            if getattr(k, "value", None) == key:
-                return v
+    def pairs(node, depth=0):
+        """(key node, value node) of a mapping as the loader sees it, in the loaded order."""
+        if not isinstance(node, yaml.MappingNode) or depth > _MAX_DEPTH:
+            return []
+        merged, explicit = [], []
+        for key, value in node.value:
+            if getattr(key, "tag", "") == "tag:yaml.org,2002:merge":
+                sources = value.value if isinstance(value, yaml.SequenceNode) else [value]
+                for source in sources:
+                    merged.extend(pairs(source, depth + 1))
+            else:
+                explicit.append((key, value))
+        # The loader puts merged keys first and lets a later key replace an earlier one's value
+        # while keeping its place, so the same is done here.
+        order, latest = [], {}
+        for key, value in merged + explicit:
+            name = getattr(key, "value", None)
+            if not isinstance(name, str):
+                continue
+            if name not in latest:
+                order.append(name)
+            latest[name] = (key, value)
+        return [latest[name] for name in order]
+
+    def child(node, name):
+        for key, value in pairs(node):
+            if key.value == name:
+                return value
         return None
 
     def record(owner, steps):
@@ -411,11 +445,9 @@ def _step_lines(yaml, text) -> dict:
                 positions[(owner, index)] = step.start_mark.line + 1
 
     jobs = child(root, "jobs")
-    if isinstance(jobs, yaml.MappingNode):
-        for key, job in jobs.value:
-            if isinstance(job, yaml.MappingNode) and hasattr(key, "value"):
-                positions[("job", str(key.value))] = key.start_mark.line + 1
-                record(str(key.value), child(job, "steps"))
+    for index, (key, job) in enumerate(pairs(jobs)):
+        positions[("job", index)] = key.start_mark.line + 1
+        record(("job", index), child(job, "steps"))
     runs = child(root, "runs")
     if isinstance(runs, yaml.MappingNode):
         record("runs", child(runs, "steps"))

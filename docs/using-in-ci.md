@@ -12,7 +12,7 @@ deviant-scan --fail-on-findings .
 | Status | Meaning |
 |---|---|
 | 0 | The scan ran and reported no finding, or you did not pass `--fail-on-findings` |
-| 1 | `--fail-on-findings` was given and the scan reported at least one finding |
+| 1 | `--fail-on-findings` was given and the scan reported at least one finding, or a detector failed so the scan is incomplete |
 | 2 | A usage error, such as a folder that does not exist or `--min-items 0` |
 
 A **finding** is an exception to a rule that passed the size floor and the confidence bound.

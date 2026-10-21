@@ -281,6 +281,7 @@ def _group_candidates(members, detector, peer, requirements, min_group, scope, p
                 for m in lacking_items
             ],
             "examples": _peer_examples(members, feature, lacking_items[0]),
+            "_members": members,
         }
         if path is not None:
             candidate["file"] = path
@@ -356,9 +357,14 @@ def inventory(items, hide=frozenset(), limit=INVENTORY_LIMIT):
     for candidate in candidates:
         fresh = [i for i in candidate["items"] if _lead_key(candidate, i) not in claimed]
         if not fresh:
+            candidate.pop("_members", None)
             continue
         claimed.update(_lead_key(candidate, i) for i in fresh)
-        distinct.append({**candidate, "items": fresh})
+        members = candidate.pop("_members")
+        # When an earlier lead took some items, the examples must be the peers of what is
+        # still listed, not of an item that is now listed elsewhere.
+        examples = _peer_examples(members, candidate["feature"], fresh[0])
+        distinct.append({**candidate, "items": fresh, "examples": examples})
     listed, truncated = [], 0
     for candidate in distinct:
         room = limit - sum(len(c["items"]) for c in listed)
@@ -429,8 +435,11 @@ def mine(
     return rules
 
 
-def load_detectors(detectors_dir: Path):
-    """Import every detector module in the folder, skipping names that start with _."""
+def load_detectors(detectors_dir: Path, failures: list | None = None):
+    """Import every detector module in the folder, skipping names that start with _.
+
+    The name of a detector that cannot be loaded is added to failures, when given.
+    """
     modules = []
     for path in sorted(Path(detectors_dir).glob("*.py")):
         if path.name.startswith("_"):
@@ -447,6 +456,8 @@ def load_detectors(detectors_dir: Path):
             SystemExit,
         ) as error:  # a detector calling sys.exit must not end the scan
             print(f"warning: could not load detector {path.name}: {error}", file=sys.stderr)
+            if failures is not None:
+                failures.append(path.stem)
             continue
         if callable(getattr(module, "extract", None)):
             modules.append(module)
@@ -467,7 +478,7 @@ def collect_items(repo_root: Path, detectors_dir: Path):
     return _collect(load_detectors(detectors_dir), repo_root)
 
 
-def _collect(modules, repo_root: Path):
+def _collect(modules, repo_root: Path, failures: list | None = None):
     items = []
     for module in modules:
         name = module.__name__.removeprefix("deviant_detector_")
@@ -476,11 +487,15 @@ def _collect(modules, repo_root: Path):
                 found = module.extract(str(repo_root))
         except (Exception, SystemExit) as error:  # one broken detector must not stop the scan
             print(f"warning: detector {name} failed and was skipped: {error}", file=sys.stderr)
+            if failures is not None:
+                failures.append(name)
             continue
         try:
             validate_items(found)
         except ValueError as error:  # bad output from one detector must not poison the rest
             print(f"warning: detector {name} returned invalid items: {error}", file=sys.stderr)
+            if failures is not None:
+                failures.append(name)
             continue
         items.extend(found)
     return items
@@ -539,7 +554,13 @@ def should_color(mode, stream, environ=None):
         return True
     if mode == "never":
         return False
-    return bool(stream.isatty()) and "NO_COLOR" not in env and env.get("TERM") != "dumb"
+    # Under pythonw stdout is None, and a wrapped stream may have no isatty: neither is a terminal.
+    isatty = getattr(stream, "isatty", None)
+    try:
+        terminal = bool(isatty()) if callable(isatty) else False
+    except (OSError, ValueError):
+        terminal = False
+    return terminal and "NO_COLOR" not in env and env.get("TERM") != "dumb"
 
 
 def _enable_windows_ansi():
@@ -637,8 +658,9 @@ def run(
     if not Path(repo_root).is_dir():
         print(f"error: {repo_root} is not a directory", file=sys.stderr)
         return 2
-    modules = load_detectors(Path(detectors_dir))
-    items = _collect(modules, Path(repo_root))
+    failures: list[str] = []
+    modules = load_detectors(Path(detectors_dir), failures)
+    items = _collect(modules, Path(repo_root), failures)
     hide = frozenset() if include_style else style_features(modules)
     rules = mine(
         items,
@@ -657,6 +679,8 @@ def run(
         )
     rules = _bounded(rules)
     survey = _bounded(inventory(items, hide)) if with_inventory else None
+    global _pending_status
+    _pending_status = 1 if fail_on_findings and (rules or failures) else 0
     if as_json:
         payload = {"version": 1, "rules": rules, "style_hidden": hidden}
         if survey is not None:
@@ -687,7 +711,7 @@ def run(
     if survey is not None and not as_json:
         print("\n" + _format_inventory(_printable(survey)))
     # Leads from --inventory are places to look, not findings, so only rules count here.
-    return 1 if fail_on_findings and rules else 0
+    return _status(fail_on_findings, rules, failures)
 
 
 # Text printed to a terminal comes from a scanned project: route paths, file names, job ids,
@@ -731,6 +755,27 @@ def _printable(value):
     if isinstance(value, dict):
         return {k: _printable(v) for k, v in value.items()}
     return value
+
+
+# The exit status of the scan in progress, kept so that main can still return it when the
+# reader closes the pipe in the middle of the output.
+_pending_status = 0
+
+
+def _status(fail_on_findings, rules, failures) -> int:
+    """1 under --fail-on-findings when there is a finding, or a detector failed; else 0.
+
+    A detector that failed checked nothing, so a scan that passes without it would pass by
+    accident. Under --fail-on-findings that fails the run too.
+    """
+    if not fail_on_findings:
+        return 0
+    if failures:
+        print(
+            f"error: {len(failures)} detector(s) failed, so the scan is incomplete",
+            file=sys.stderr,
+        )
+    return 1 if rules or failures else 0
 
 
 def _format_inventory(survey) -> str:
@@ -855,7 +900,9 @@ def main(argv=None):
             sys.stdout = open(os.devnull, "w")  # noqa: SIM115
         except OSError:
             pass
-        return 0
+        # The status was decided before the output started, so a closed pipe cannot hide a
+        # finding from a CI job that checks it.
+        return _pending_status
 
 
 if __name__ == "__main__":

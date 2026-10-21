@@ -97,6 +97,14 @@ def _run_git(repo: str, args: list[str], extra: tuple[str, ...] = ()) -> str | N
 
 
 _filter_overrides_cache: dict[str, tuple[str, ...]] = {}
+# Repositories with a filter that cannot be switched off. Blame is never run in them.
+_filters_unsafe: set[str] = set()
+
+
+def _filters_can_be_switched_off(repo: str) -> bool:
+    """False if the repository defines a filter whose name -c cannot express."""
+    _filter_overrides(repo)
+    return repo not in _filters_unsafe
 
 
 def _filter_overrides(repo: str) -> tuple[str, ...]:
@@ -118,6 +126,11 @@ def _filter_overrides(repo: str) -> tuple[str, ...]:
                 "process",
             }:
                 names.add(key[len("filter.") : key.rindex(".")])
+        # `git -c name=value` splits at the first "=", so a filter whose name holds one cannot
+        # be switched off that way. Nor can one whose name is not valid UTF-8, because the
+        # listing is decoded with replacement and the override would name a different filter.
+        if any("=" in name or chr(0xFFFD) in name for name in names):
+            _filters_unsafe.add(repo)
         options: list[str] = []
         for name in sorted(names):
             for setting in ("clean", "smudge", "process"):
@@ -140,13 +153,16 @@ def _note_outside_git_dir(repo: str) -> None:
     report show that repository's authors and commit subjects, so the reader is told.
     """
     answer = _run_git(repo, ["rev-parse", "--absolute-git-dir"])
-    if not answer:
+    top = _run_git(repo, ["rev-parse", "--show-toplevel"])
+    if not answer or not top:
         return
+    # The usual case is the .git folder at the top of the work tree that holds the scanned
+    # folder, also when only a subfolder of the repository (a monorepo package) is scanned.
     try:
-        inside = Path(answer.strip()).resolve().is_relative_to(Path(repo).resolve())
+        usual = Path(answer.strip()).resolve() == (Path(top.strip()) / ".git").resolve()
     except (OSError, RuntimeError):
         return
-    if not inside:
+    if not usual:
         print(
             "warning: git history comes from "
             f"{_show_path(answer.strip())}, which is outside the scanned folder "
@@ -178,6 +194,14 @@ class GitEvidence:
         inside = _git(self.repo, ["rev-parse", "--is-inside-work-tree"])
         self.available = inside is not None and inside.strip() == "true"
         self._attr_source_ok = self.available and _attr_source_supported()
+        if self._attr_source_ok and not _filters_can_be_switched_off(self.repo):
+            # Fail closed: blaming here could run a program the repository names.
+            self._attr_source_ok = False
+            print(
+                "warning: the repository defines a git filter whose name cannot be switched "
+                "off safely, so blame evidence is skipped",
+                file=sys.stderr,
+            )
         if self.available:
             _note_outside_git_dir(self.repo)
         if self.available and not self._attr_source_ok:

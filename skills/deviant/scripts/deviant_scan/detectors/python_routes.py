@@ -291,7 +291,8 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
         shown = ", ".join(unreadable[:3]) + (" ..." if len(unreadable) > 3 else "")
         print(
             f"python_routes: {len(unreadable)} path(s) could not be read and were skipped, "
-            f"for example because the path is longer than the system allows: {_show(shown)}",
+            "for example a path longer than the system allows, or a name the system cannot "
+            f"open such as one ending in a space or a dot on Windows: {_show(shown)}",
             file=sys.stderr,
         )
     if failed:
@@ -1115,7 +1116,15 @@ _SAYS_PUBLIC = re.compile(
 )
 COMMENT_LOOKBACK = 3
 # A claim of public access is void when the same sentence negates it, as in "Not open to everyone".
-_NEGATION = re.compile(r"\b(?:not|never|no longer)\b|n't\b", re.IGNORECASE)
+# "No anonymous access" and "rejects requests without auth" negate the claim that follows.
+# "requires" is left out on purpose: "requires no auth" is a claim of public access.
+_NEGATION = re.compile(
+    r"\b(?:not|never|no longer|no|rejects?|rejected|denies|deny|denied|refuses?|refused"
+    r"|blocks?|blocked|forbids?|forbidden)\b|n't\b",
+    re.IGNORECASE,
+)
+# Abbreviations end in a dot that is not the end of a sentence.
+_ABBREVIATION = re.compile(r"\b(e\.g|i\.e|etc|vs)\.", re.IGNORECASE)
 _NEGATION_LOOKBACK = 300
 
 
@@ -1124,6 +1133,7 @@ def _says_public(text: str) -> bool:
         # Only the text just before the match can negate it, so look back a fixed distance.
         # Splitting all the text before it, for every match, grows with the square of the size.
         window = text[max(0, match.start() - _NEGATION_LOOKBACK) : match.start()]
+        window = _ABBREVIATION.sub(lambda m: m.group(1).replace(".", ""), window)
         sentence = re.split(r"[.;!?\n]", window)[-1]
         if not _NEGATION.search(sentence):
             return True
