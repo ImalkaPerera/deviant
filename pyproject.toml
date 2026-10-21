@@ -1,6 +1,6 @@
 [project]
 name = "deviant-scan"
-version = "0.3.1"
+version = "0.3.2"
 description = "Finds bugs where code breaks the project's own patterns."
 readme = "README-pypi.md"
 license = "MIT OR Apache-2.0"
