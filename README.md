@@ -4,6 +4,8 @@ The GitHub Pages site for [Deviant](https://github.com/ImalkaPerera/deviant), se
 branch at <https://imalkaperera.github.io/deviant/>.
 
 It is one static page, `index.html`, with no build step and no external scripts or fonts. The
-images in `assets/` are copies of `docs/assets/` on `main`; copy them again when those change.
+logos and social image in `assets/` are copies of `docs/assets/` on `main`. The terminal in the
+hero is the real output of `deviant-scan` on `docs/demo`, written into the HTML; update it if the
+output format changes.
 
 To preview it, open `index.html` in a browser.
