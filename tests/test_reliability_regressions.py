@@ -313,12 +313,15 @@ def test_a_commit_dated_past_the_year_9999_does_not_end_the_scan(tmp_path):
     git(tmp_path, "init", "-q")
     git(tmp_path, "add", "-A")
     git(tmp_path, "commit", "-q", "-m", "far", date="@999999999999 +0000")
-    stored = subprocess.run(
-        ["git", "-C", str(tmp_path), "log", "-1", "--format=%at"], capture_output=True, text=True
-    ).stdout.strip()
-    if stored != "999999999999":
-        # Git for Windows keeps commit times in 32 bits and stores 2106 instead.
-        pytest.skip(f"this git stores the far date as {stored}")
+    blame = subprocess.run(
+        ["git", "-C", str(tmp_path), "blame", "--line-porcelain", "-L1,1", "--", "a.py"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    if "author-time 999999999999" not in blame:
+        # Git for Windows keeps the date but blame reports it in 32 bits, as 2106, so this
+        # git never hands the scan the far date. The blame parser test covers it there.
+        pytest.skip("this git's blame does not report the far date")
 
     rules = mine.mine(scan_items(range(1, 31), 5), repo_root=tmp_path)
 
