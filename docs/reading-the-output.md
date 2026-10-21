@@ -61,8 +61,9 @@ With `--inventory`, the output also lists every peer group and its **leads**: fo
 that at least 60% of a group has, the items that lack it (at most 8 per feature, in groups of
 4 or more). The same is done for the part of a group that sits in one file (3 items or more),
 which catches a job or route that differs from its neighbours in a file even when the project
-as a whole is mixed. The JSON has an `inventory` object with `groups`, `candidates` and
-`truncated`. A candidate gives its `scope` (`group` or `file`, with the `file` for the second),
+as a whole is mixed. The JSON has an `inventory` object with `groups`, `group_count`, `groups_omitted`,
+`candidates` and `truncated`. `groups` lists the 100 largest groups, and `group_count`
+is how many there are in all. A candidate gives its `scope` (`group` or `file`, with the `file` for the second),
 the size `n` of the peers compared, how many `have` and `lack` the feature, the `share` that
 have it, the `items` that lack it, and the nearest `examples` that have it. An item is listed
 once, under the candidate with the larger share. A lead has passed no

@@ -85,7 +85,7 @@ rules.
 - `compliant_examples`: a few items that do follow the pattern, for comparison.
 
 `inventory` (present because Step 1 asked for it) is an object with `groups` (how each peer
-group splits), `candidates` (the **leads**) and `truncated`. A lead is, for each feature that
+group splits, the largest 100), `candidates` (the **leads**) and `truncated`. A lead is, for each feature that
 most of a group has, the few items that lack it. Each candidate has `detector`,
 `peer_group`, `scope` (`group`, or `file` for the peers in one file, with a `file` field),
 `feature`, `n`, `have`, `lack`, `share`, `items` (the items that lack the feature,

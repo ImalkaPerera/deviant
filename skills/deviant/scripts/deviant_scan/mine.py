@@ -226,6 +226,9 @@ INVENTORY_MIN_LOCAL_GROUP = 3
 INVENTORY_MIN_SHARE = 0.6
 INVENTORY_MAX_PER_FEATURE = 8
 INVENTORY_LIMIT = 60
+# Groups are listed largest first and only this many, so a project with thousands of small
+# folders does not produce thousands of group entries. The count of all of them is kept.
+INVENTORY_MAX_GROUPS = 100
 
 
 def _peer_examples(members, feature, lacking, count=2):
@@ -358,7 +361,15 @@ def inventory(items, hide=frozenset(), limit=INVENTORY_LIMIT):
             listed.append({**candidate, "items": candidate["items"][:room]})
         else:
             listed.append(candidate)
-    return {"groups": groups, "candidates": listed, "truncated": truncated}
+    group_count = len(groups)
+    groups.sort(key=lambda g: (-g["n"], g["detector"], g["peer_group"]))
+    return {
+        "groups": groups[:INVENTORY_MAX_GROUPS],
+        "group_count": group_count,
+        "groups_omitted": max(group_count - INVENTORY_MAX_GROUPS, 0),
+        "candidates": listed,
+        "truncated": truncated,
+    }
 
 
 def mine(
@@ -714,7 +725,7 @@ def _printable(value):
 
 def _format_inventory(survey) -> str:
     """Plain text for --inventory: one line per candidate, then the items that lack the feature."""
-    lines = [f"inventory: {len(survey['groups'])} group(s), leads to read, not findings"]
+    lines = [f"inventory: {survey['group_count']} group(s), leads to read, not findings"]
     for c in survey["candidates"]:
         lines.append(
             f"{c['detector']}.{c['peer_group']}.{c['feature']}  "

@@ -177,6 +177,15 @@ def _inside(path: Path, root: Path) -> bool:
         return False
 
 
+def _cannot_resolve(path: Path) -> bool:
+    """True if the system cannot resolve this path at all, as opposed to it leading outside."""
+    try:
+        path.resolve()
+    except (OSError, RuntimeError):
+        return True
+    return False
+
+
 def _extra_auth_words(root: Path) -> set[str]:
     """Words the user adds in .deviant/config.json under "auth_words"."""
     path = root / ".deviant" / "config.json"
@@ -200,19 +209,54 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
     failed = []
     # A junction can lead to a file already read under another path. Read each file once.
     seen_real: set[Path] = set()
-    for dirpath, dirnames, filenames in os.walk(root):
-        # os.walk follows Windows junctions, which is_symlink() does not report, so a
-        # folder that leads outside the repository is dropped here.
-        dirnames[:] = sorted(
-            d for d in dirnames if d not in SKIP_DIRS and _inside(Path(dirpath) / d, root)
-        )
+    # Folders already walked, by real path. os.walk follows Windows junctions, and a junction
+    # that points back up the tree would be walked again at every level, which grows
+    # exponentially with how many levels the path length allows. Each real folder is walked once.
+    seen_dirs: set[Path] = set()
+    unreadable: list[str] = []
+
+    def note_unreadable(error: OSError) -> None:
+        # os.walk drops a folder it cannot list without a word unless it is given a handler.
+        name = getattr(error, "filename", None)
+        try:
+            unreadable.append(Path(name).relative_to(root).as_posix())
+        except (TypeError, ValueError):
+            unreadable.append(str(name))
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=note_unreadable):
+        here = Path(dirpath)
+        try:
+            real_dir = here.resolve()
+        except (OSError, RuntimeError):
+            real_dir = None
+        if real_dir is not None:
+            if real_dir in seen_dirs:
+                dirnames[:] = []
+                continue
+            seen_dirs.add(real_dir)
+        # A folder that leads outside the repository is dropped here. One that cannot be
+        # resolved at all, such as a path longer than the system allows, is dropped and reported.
+        kept = []
+        for d in sorted(dirnames):
+            if d in SKIP_DIRS:
+                continue
+            child = here / d
+            if _inside(child, root):
+                kept.append(d)
+            elif _cannot_resolve(child):
+                unreadable.append(child.relative_to(root).as_posix())
+        dirnames[:] = kept
         for name in sorted(filenames):
             if not name.endswith(".py"):
                 continue
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()
             try:
-                if path.is_symlink() or not _inside(path, root):
+                if path.is_symlink():
+                    continue
+                if not _inside(path, root):
+                    if _cannot_resolve(path):
+                        unreadable.append(rel)
                     continue
                 if path.stat().st_size > MAX_BYTES:
                     print(
@@ -227,6 +271,7 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
                 seen_real.add(real)
                 source = path.read_bytes()
             except OSError:
+                unreadable.append(rel)
                 continue
             tree = _parse(source, rel)
             if tree is not None:
@@ -242,6 +287,13 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
                     "and was skipped",
                     file=sys.stderr,
                 )
+    if unreadable:
+        shown = ", ".join(unreadable[:3]) + (" ..." if len(unreadable) > 3 else "")
+        print(
+            f"python_routes: {len(unreadable)} path(s) could not be read and were skipped, "
+            f"for example because the path is longer than the system allows: {_show(shown)}",
+            file=sys.stderr,
+        )
     if failed:
         # A skipped file can hide the auth helpers other files import, so say so.
         version = ".".join(map(str, sys.version_info[:2]))
