@@ -58,8 +58,8 @@ one, so those findings are hidden by default. The text output counts them, and t
 top-level `style_hidden` number. Add `--include-style` to see them.
 
 With `--inventory`, the output also lists every peer group and its **leads**: for each feature
-that at least 60% of a group has, the items that lack it (at most 8 per feature, in groups of
-4 or more). The same is done for the part of a group that sits in one file (3 items or more),
+that at least 60% of a group has, the items that lack it (at most 8 per feature, or any number when at least 85% of the group
+has it, in groups of 4 or more). The same is done for the part of a group that sits in one file (3 items or more),
 which catches a job or route that differs from its neighbours in a file even when the project
 as a whole is mixed. The JSON has an `inventory` object with `groups`, `group_count`, `groups_omitted`,
 `candidates` and `truncated`. `groups` lists the 100 largest groups, and `group_count`

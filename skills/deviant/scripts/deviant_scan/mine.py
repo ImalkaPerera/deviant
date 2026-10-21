@@ -225,6 +225,10 @@ INVENTORY_MIN_GROUP = 4
 INVENTORY_MIN_LOCAL_GROUP = 3
 INVENTORY_MIN_SHARE = 0.6
 INVENTORY_MAX_PER_FEATURE = 8
+# A group where nearly every item follows the rule can have many exceptions and still
+# have a clear rule: 25 unpinned actions among 199. From this share up, the limit on how
+# many items may lack the feature no longer applies.
+INVENTORY_CLEAR_SHARE = 0.85
 INVENTORY_LIMIT = 60
 # Groups are listed largest first and only this many, so a project with thousands of small
 # folders does not produce thousands of group entries. The count of all of them is kept.
@@ -252,7 +256,10 @@ def _group_candidates(members, detector, peer, requirements, min_group, scope, p
         have = sum(1 for m in members if _has(m, feature))
         lacking = n - have
         share = have / n
-        if share < INVENTORY_MIN_SHARE or not 1 <= lacking <= INVENTORY_MAX_PER_FEATURE:
+        if share < INVENTORY_MIN_SHARE or lacking < 1:
+            continue
+        # Few exceptions in a mixed group, or any number in a group that is clearly one way.
+        if lacking > INVENTORY_MAX_PER_FEATURE and share < INVENTORY_CLEAR_SHARE:
             continue
         lacking_items = [m for m in members if not _has(m, feature)]
         candidate = {
@@ -298,7 +305,8 @@ def inventory(items, hide=frozenset(), limit=INVENTORY_LIMIT):
 
     A group is every item of one detector in one peer group. For each feature an item should
     have, a candidate is the set of items that lack it when at least INVENTORY_MIN_SHARE of
-    the peers have it and no more than INVENTORY_MAX_PER_FEATURE items lack it.
+    the peers have it and either no more than INVENTORY_MAX_PER_FEATURE items lack it or
+    at least INVENTORY_CLEAR_SHARE of the peers have it.
 
     Peers are looked at twice: the whole group (scope "group"), and the part of the group that
     sits in one file (scope "file"). The second catches an item that differs from its

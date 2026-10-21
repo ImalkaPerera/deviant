@@ -112,7 +112,11 @@ def test_every_inventory_lead_names_an_item_that_really_lacks_the_feature(items,
     seen = set()
     for candidate in survey["candidates"]:
         assert candidate["share"] >= mine.INVENTORY_MIN_SHARE
-        assert 1 <= candidate["lack"] <= mine.INVENTORY_MAX_PER_FEATURE
+        assert candidate["lack"] >= 1
+        assert (
+            candidate["lack"] <= mine.INVENTORY_MAX_PER_FEATURE
+            or candidate["share"] >= mine.INVENTORY_CLEAR_SHARE
+        )
         assert candidate["have"] + candidate["lack"] == candidate["n"]
         for lead in candidate["items"]:
             entry = by_key[(candidate["peer_group"], lead["item_id"], lead["file"], lead["line"])]
