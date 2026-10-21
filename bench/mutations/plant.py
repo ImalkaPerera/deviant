@@ -96,8 +96,13 @@ BODY_AUTH = re.compile(
 
 
 # Names that contain an auth word but are not auth: ID resolvers and lookups such as
-# resolve_triggered_by_user_id, which only read a value from the request.
-NOT_AUTH = re.compile(r"resolve|_id\b|_ids\b|lookup|fetch|get_by|filter", re.IGNORECASE)
+# resolve_triggered_by_user_id, which only read a value from the request, and providers of a
+# resource such as get_user_manager or get_user_svc, which hand the route an object to use.
+NOT_AUTH = re.compile(
+    r"resolve|_id\b|_ids\b|lookup|fetch|get_by|filter|"
+    r"_(?:manager|svc|service|repo|repository|db|session|client|store|dao)$",
+    re.IGNORECASE,
+)
 
 
 def dependency_target(call):
@@ -262,8 +267,11 @@ def plant_gha_same(root, manifest, repo):
             m = re.match(r"^(\s{4})timeout-minutes:\s*\S+\s*$", line)
             if m:
                 sites.append((path, i, line))
+    # Sites were found before any change. Each deletion moves the later lines of its file up.
+    shift = {}
     for path, i, line in spaced(sites, PER_REPO["same_gha"]):
         lines = read_source(path).split("\n")
+        i += shift.get(path, 0)
         if lines[i] != line:
             continue
         del lines[i]
@@ -275,6 +283,7 @@ def plant_gha_same(root, manifest, repo):
         except Exception:
             continue
         write_source(path, text)
+        shift[path] = shift.get(path, 0) - 1
         manifest.append(
             {
                 "id": f"{repo}:same_gha:{path.relative_to(root).as_posix()}:{i + 1}",
@@ -332,10 +341,15 @@ def plant_gha_other(root, manifest, repo):
                 continue
             if step_sets_continue_on_error(lines, i):
                 continue
-            sites.append((path, i, m.group(1)))
-    for path, i, indent in spaced(sites, PER_REPO["other_gha"]):
+            sites.append((path, i, m.group(1), line))
+    # Sites were found before any change. Each insertion moves the later lines of its file down.
+    shift = {}
+    for path, i, indent, expected in spaced(sites, PER_REPO["other_gha"]):
         lines = read_source(path).split("\n")
+        i += shift.get(path, 0)
         original = lines[i]
+        if original != expected:
+            continue
         eol = "\r" if original.endswith("\r") else ""
         lines.insert(i + 1, f"{indent}continue-on-error: true{eol}")
         text = "\n".join(lines)
@@ -346,6 +360,7 @@ def plant_gha_other(root, manifest, repo):
         except Exception:
             continue
         write_source(path, text)
+        shift[path] = shift.get(path, 0) + 1
         manifest.append(
             {
                 "id": f"{repo}:other_gha:{path.relative_to(root).as_posix()}:{i + 1}",

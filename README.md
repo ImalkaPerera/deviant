@@ -150,10 +150,10 @@ We publish what Deviant got wrong, not only what it got right.
   a prompt-injection attempt, and handled all three.
 - **No bug confirmed by a maintainer in someone else's project yet.**
 - **Benchmarks are published, and they are not flattering.** On a sealed fresh set of 99 bugs
-  planted in 19 repos the scan had never seen, Claude reading the code alone found 45% and Claude
-  with the Deviant skill found 35%. The skill is ahead on ignored step failures (76% against 51%)
-  and removed auth checks (67% against 56%), and it finds none of the inverted conditions that no
-  detector checks. On the older ten-repo set the skill was tuned up to 65% (against 52% for
+  planted in 19 repos the scan had never seen, Claude reading the code alone found 55% and Claude
+  with the Deviant skill found 35% (first published as 45% against 35%, before a scorer fix). The
+  skill is ahead only on ignored step failures (74% against 56%), and it finds almost none of the
+  inverted conditions that no detector checks. On the older ten-repo set the skill was tuned up to 65% (against 52% for
   Claude alone), but that set is tuned data. On 35 real bugs from public fix commits the scan
   alone, with no AI, pointed at 25 (22 before one limit was tuned): all 13 unpinned actions and
   all 3 missing timeouts, but only 1 of 7 missing-auth bugs: two had no protected sibling to
@@ -170,7 +170,7 @@ The full story is in [tested on real projects](docs/tested-on-real-projects.md).
 - [x] A Claude Code skill that judges each finding: bug, intentional or unsure
 - [ ] Saved rules, and a hook that warns an AI agent the moment it breaks one
 - [ ] More checks: Dockerfiles, Flask, Express, Spring, Kubernetes, Terraform
-- [ ] A benchmark that shows Deviant beating asking Claude alone (not yet: 35% against 45% on the
+- [ ] A benchmark that shows Deviant beating asking Claude alone (not yet: 35% against 55% on the
       fresh set, see `bench/results/fresh-set-benchmark.md`)
 - [x] A PyPI release
 
