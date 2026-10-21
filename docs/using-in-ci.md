@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - run: python -m pip install deviant-scan
+      - run: python -m pip install deviant-scan==0.3.1
       - run: deviant-scan --with-git --fail-on-findings .
 ```
 
@@ -55,7 +55,7 @@ Check the pinned commits against the current releases before you copy them.
 
 ## Tips
 
-- **Pin the version** (`pip install deviant-scan==0.3.0`) so a new release does not change what
+- **Pin the version** (`pip install deviant-scan==0.3.1`) so a new release does not change what
   fails your build.
 - **A false alarm** can be an auth dependency with an unusual name. Name it once in
   [`.deviant/config.json`](configuration.md) and it counts from then on.
