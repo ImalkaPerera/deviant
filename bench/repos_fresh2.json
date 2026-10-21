@@ -1,0 +1,207 @@
+{
+ "selected_on": "2026-10-21",
+ "status": "SEALED. No detector or skill has been run on any repo in this file. It is opened only when bench/FROZEN-2.md names the commit under test.",
+ "rule": "bench/PREREGISTRATION.md, section 'Second fresh set': the first set's rule with Amendment 1, taken next in star order, excluding bench/repos_fresh.json and bench/repos_mined.json. Chosen by a script that did not run the scanner.",
+ "repos": [
+  {
+   "name": "AhmadHassan-BTed/AutoSwarm-Shadow-Adapter",
+   "url": "https://github.com/AhmadHassan-BTed/AutoSwarm-Shadow-Adapter",
+   "commit": "69d27ddcd626b93566261d8363f99f79731a36a7",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 2223,
+   "pushed": "2026-10-20",
+   "route_lines": 16
+  },
+  {
+   "name": "Finrandojin/alexandria-audiobook",
+   "url": "https://github.com/Finrandojin/alexandria-audiobook",
+   "commit": "be6343d95d94db5f88973aa25575a390f3ce46aa",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 1073,
+   "pushed": "2026-08-02",
+   "route_lines": 72
+  },
+  {
+   "name": "feldroy/air",
+   "url": "https://github.com/feldroy/air",
+   "commit": "195df0db4757b4539c8073e2ce72c45c12b89ae2",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 919,
+   "pushed": "2026-10-16",
+   "route_lines": 48
+  },
+  {
+   "name": "LibreChat-AI/rag-api",
+   "url": "https://github.com/LibreChat-AI/rag-api",
+   "commit": "c4e5cbf79fcece1df9adfff5dfed983a5990ca9f",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 914,
+   "pushed": "2026-10-04",
+   "route_lines": 16
+  },
+  {
+   "name": "LvcidPsyche/auto-browser",
+   "url": "https://github.com/LvcidPsyche/auto-browser",
+   "commit": "3b5c1866faff1a108ef96e2ff8b7fd73df531398",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 913,
+   "pushed": "2026-10-20",
+   "route_lines": 105
+  },
+  {
+   "name": "getludic/ludic",
+   "url": "https://github.com/getludic/ludic",
+   "commit": "73aba6a4186e01d7774b09724eb35be48745a464",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 893,
+   "pushed": "2026-09-21",
+   "route_lines": 14
+  },
+  {
+   "name": "Anil-matcha/open-agent-connector",
+   "url": "https://github.com/Anil-matcha/open-agent-connector",
+   "commit": "7aa2e2fa47274313a70266ebb65fb8aaed8acc4f",
+   "kind": "fastapi",
+   "licence": "apache-2.0",
+   "stars": 843,
+   "pushed": "2026-10-19",
+   "route_lines": 29
+  },
+  {
+   "name": "Guard-Core/fastapi-guard",
+   "url": "https://github.com/Guard-Core/fastapi-guard",
+   "commit": "46ec0540948c41b01bd61bd83fe2351bdc2f39e9",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 825,
+   "pushed": "2026-10-21",
+   "route_lines": 98
+  },
+  {
+   "name": "litestar-org/advanced-alchemy",
+   "url": "https://github.com/litestar-org/advanced-alchemy",
+   "commit": "4608a7b0fb0705372bfed709be50c684b4e8d99d",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 813,
+   "pushed": "2026-10-21",
+   "route_lines": 16
+  },
+  {
+   "name": "ChenShuo2004/cs-board",
+   "url": "https://github.com/ChenShuo2004/cs-board",
+   "commit": "f7780ef08cc2c752806e49805f5f696bfcd020de",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 785,
+   "pushed": "2026-10-01",
+   "route_lines": 31
+  },
+  {
+   "name": "asaotomo/FofaMap",
+   "url": "https://github.com/asaotomo/FofaMap",
+   "commit": "d959f48bfadcc2517a9338a92acf659cb6389c1c",
+   "kind": "fastapi",
+   "licence": "apache-2.0",
+   "stars": 750,
+   "pushed": "2026-08-16",
+   "route_lines": 14
+  },
+  {
+   "name": "shuxiachai/academic-commercialization-agent",
+   "url": "https://github.com/shuxiachai/academic-commercialization-agent",
+   "commit": "4e807dcf89c5ab0c612ace91efbc5944baf7b77e",
+   "kind": "fastapi",
+   "licence": "mit",
+   "stars": 647,
+   "pushed": "2026-10-21",
+   "route_lines": 32
+  },
+  {
+   "name": "rohitg00/ai-engineering-from-scratch",
+   "url": "https://github.com/rohitg00/ai-engineering-from-scratch",
+   "commit": "45fa4084de6ba2f88fa96a41e69efa2166f868b3",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 71895,
+   "pushed": "2026-10-21",
+   "workflow_files": 7
+  },
+  {
+   "name": "usestrix/strix",
+   "url": "https://github.com/usestrix/strix",
+   "commit": "fde37a149fc942dd107666441a1989f187d30c3b",
+   "kind": "workflows",
+   "licence": "apache-2.0",
+   "stars": 70549,
+   "pushed": "2026-10-21",
+   "workflow_files": 7
+  },
+  {
+   "name": "ZhuLinsen/daily_stock_analysis",
+   "url": "https://github.com/ZhuLinsen/daily_stock_analysis",
+   "commit": "7a21cd76952c7fe44a7fc5a6113a5b2b8a16bb32",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 66806,
+   "pushed": "2026-10-17",
+   "workflow_files": 10
+  },
+  {
+   "name": "mvanhorn/last30days-skill",
+   "url": "https://github.com/mvanhorn/last30days-skill",
+   "commit": "832d09591568e37dd990ccb9d5c51fb4a403f5ed",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 64913,
+   "pushed": "2026-10-20",
+   "workflow_files": 9
+  },
+  {
+   "name": "MemPalace/mempalace",
+   "url": "https://github.com/MemPalace/mempalace",
+   "commit": "f41e8e75ddaadf5588d5127715fa531d79eadb45",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 59671,
+   "pushed": "2026-10-20",
+   "workflow_files": 7
+  },
+  {
+   "name": "FoundationAgents/OpenManus",
+   "url": "https://github.com/FoundationAgents/OpenManus",
+   "commit": "3309bf4e416fb1c74b008f3e86494439a31bad53",
+   "kind": "workflows",
+   "licence": "mit",
+   "stars": 58751,
+   "pushed": "2026-09-30",
+   "workflow_files": 6
+  },
+  {
+   "name": "zylon-ai/private-gpt",
+   "url": "https://github.com/zylon-ai/private-gpt",
+   "commit": "ff410fed574b8b2eab4e2f4c53d99e7065e5cdef",
+   "kind": "workflows",
+   "licence": "apache-2.0",
+   "stars": 57601,
+   "pushed": "2026-10-20",
+   "workflow_files": 10
+  },
+  {
+   "name": "HKUDS/CLI-Anything",
+   "url": "https://github.com/HKUDS/CLI-Anything",
+   "commit": "34f519533bc175d2fe287ab8316b0dd99bb9cc43",
+   "kind": "workflows",
+   "licence": "apache-2.0",
+   "stars": 55748,
+   "pushed": "2026-09-22",
+   "workflow_files": 7
+  }
+ ]
+}
