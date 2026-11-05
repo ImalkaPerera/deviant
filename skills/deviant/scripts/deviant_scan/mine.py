@@ -445,6 +445,10 @@ def load_detectors(detectors_dir: Path, failures: list | None = None):
         if path.name.startswith("_"):
             continue
         spec = importlib.util.spec_from_file_location(f"deviant_detector_{path.stem}", path)
+        if spec is None or spec.loader is None:
+            if failures is not None:
+                failures.append(path.stem)
+            continue
         module = importlib.util.module_from_spec(spec)
         try:
             # A detector's stray print() would land in the report, and under --json would
