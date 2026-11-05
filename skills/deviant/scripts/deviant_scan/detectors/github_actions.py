@@ -460,7 +460,7 @@ def _step_lines(yaml, text) -> dict:
     key (`<<: *base`) brings in the keys of the mapping it names, and when a key appears twice
     the later one wins.
     """
-    positions = {}
+    positions: dict = {}
     try:
         root = yaml.compose(text, Loader=_workflow_loader(yaml))
     except (yaml.YAMLError, ValueError, AttributeError, RecursionError, MemoryError):

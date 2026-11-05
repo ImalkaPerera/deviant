@@ -248,6 +248,9 @@ def _parse_files(root: Path) -> tuple[dict[str, ast.Module], dict[str, list[str]
     def note_unreadable(error: OSError) -> None:
         # os.walk drops a folder it cannot list without a word unless it is given a handler.
         name = getattr(error, "filename", None)
+        if name is None:
+            unreadable.append("?")
+            return
         try:
             unreadable.append(Path(name).relative_to(root).as_posix())
         except (TypeError, ValueError):
