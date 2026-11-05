@@ -357,7 +357,9 @@ def _attr_source_supported() -> bool:
     except (OSError, subprocess.TimeoutExpired):
         return False
     match = re.search(r"(\d+)\.(\d+)", out)
-    return bool(match) and (int(match.group(1)), int(match.group(2))) >= (2, 40)
+    if match is None:
+        return False
+    return (int(match.group(1)), int(match.group(2))) >= (2, 40)
 
 
 def _shallow_boundary(repo: str) -> set[str]:
@@ -372,7 +374,7 @@ def _shallow_boundary(repo: str) -> set[str]:
     return {line.strip() for line in lines if line.strip()}
 
 
-def _parse_blame(output: str, boundary: set[str] = frozenset()) -> dict[int, dict]:
+def _parse_blame(output: str, boundary: frozenset[str] | set[str] = frozenset()) -> dict[int, dict]:
     """Parse `git blame --line-porcelain` into {final line number: commit info}."""
     result: dict[int, dict] = {}
     current: dict | None = None
