@@ -57,6 +57,8 @@ result:
 - a `git` block with `history_truncated` true, or a shallow clone: git authors are
   unreliable. Suggest
   `git fetch --unshallow`.
+- `detector(s) failed` or `could not load detector`: a detector did not run, so the scan is
+  incomplete. Name the detector in the report and do not read its silence as a clean result.
 - `no git evidence added`: the folder is not a git repository, so there is no history to use.
 
 If `rules` is empty, say so plainly: a group needs about 25 similar items before one exception

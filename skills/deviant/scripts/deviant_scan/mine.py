@@ -446,6 +446,7 @@ def load_detectors(detectors_dir: Path, failures: list | None = None):
             continue
         spec = importlib.util.spec_from_file_location(f"deviant_detector_{path.stem}", path)
         if spec is None or spec.loader is None:
+            print(f"warning: could not load detector {path.name}: no import spec", file=sys.stderr)
             if failures is not None:
                 failures.append(path.stem)
             continue

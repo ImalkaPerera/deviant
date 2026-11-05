@@ -209,3 +209,12 @@ def test_non_ascii_text_does_not_crash_a_console_that_cannot_print_it(tmp_path):
     stdout = result.stdout.decode("cp1252", errors="replace")
     assert result.returncode == 0, result.stderr.decode("cp1252", errors="replace")
     assert "exception:" in stdout
+
+
+def test_load_detectors_reports_a_detector_with_no_import_spec(tmp_path: Path, monkeypatch, capsys):
+    (tmp_path / "broken.py").write_text("DETECTOR = 1\n", encoding="utf-8")
+    monkeypatch.setattr("importlib.util.spec_from_file_location", lambda *a, **k: None)
+    failures: list = []
+    assert load_detectors(tmp_path, failures) == []
+    assert failures == ["broken"]
+    assert "could not load detector broken.py" in capsys.readouterr().err
